@@ -21,7 +21,6 @@ import {
   Sparkles,
   HeartPulse,
   Shirt,
-  PhoneCall,
   Save,
   FolderPlus
 } from 'lucide-react';
@@ -127,7 +126,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
   const [newPackName, setNewPackName] = useState('');
   const [newPackDesc, setNewPackDesc] = useState('');
   const [newPackFields, setNewPackFields] = useState<Partial<FormField>[]>([
-    { label: 'Custom Field 1', type: 'text', placeholder: 'Enter details...', required: true }
+    { label: 'Custom Field 1', type: 'text', placeholder: 'Enter details...', required: true, section: 'part1' }
   ]);
 
   useEffect(() => {
@@ -141,7 +140,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
     }
   };
 
-  const handleAddField = (fieldType: FieldType) => {
+  const handleAddField = (fieldType: FieldType, defaultSection: 'part1' | 'part2' = 'part1') => {
     const newField: FormField = {
       id: `f_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       label: fieldType === 'link' ? 'Website / URL Link' : `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} Field`,
@@ -149,7 +148,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
       required: true,
       placeholder: fieldType === 'select' || fieldType === 'radio' ? undefined : fieldType === 'link' ? 'https://...' : 'Enter response...',
       options: fieldType === 'select' || fieldType === 'radio' ? ['Option 1', 'Option 2', 'Option 3'] : undefined,
-      section: 'part1'
+      section: defaultSection
     };
     setFields([...fields, newField]);
   };
@@ -206,14 +205,14 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
         placeholder: f.placeholder || '',
         required: f.required !== false,
         options: f.options,
-        section: 'part1'
+        section: f.section || 'part1'
       }))
     };
 
     setCustomPacks([...customPacks, packToSave]);
     setNewPackName('');
     setNewPackDesc('');
-    setNewPackFields([{ label: 'Custom Field 1', type: 'text', placeholder: 'Enter details...', required: true }]);
+    setNewPackFields([{ label: 'Custom Field 1', type: 'text', placeholder: 'Enter details...', required: true, section: 'part1' }]);
     setIsCreatingPack(false);
   };
 
@@ -270,7 +269,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  No-Code Form Builder & Custom Injector
+                  No-Code Form Builder & Field Injector
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                   SUPABASE READY
@@ -534,7 +533,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleInjectPack(pack)}
-                            className="px-2.5 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 text-[11px] font-extrabold transition flex items-center gap-1 shadow-xs"
+                            className="px-2.5 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 text-[11px] font-extrabold transition flex items-center gap-1 shadow-xs cursor-pointer"
                           >
                             <Plus className="w-3 h-3 text-amber-500" />
                             Inject Fields
@@ -581,7 +580,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                       <div className="space-y-2">
                         <span className="text-[11px] font-bold text-slate-600 uppercase">Pack Fields:</span>
                         {newPackFields.map((f, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
+                          <div key={idx} className="flex flex-wrap items-center gap-2">
                             <input
                               type="text"
                               value={f.label || ''}
@@ -608,6 +607,18 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                               <option value="link">URL Link</option>
                               <option value="number">Number</option>
                             </select>
+                            <select
+                              value={f.section || 'part1'}
+                              onChange={(e) => {
+                                const updated = [...newPackFields];
+                                updated[idx].section = e.target.value as 'part1' | 'part2';
+                                setNewPackFields(updated);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 font-medium"
+                            >
+                              <option value="part1">Part 1 (Church)</option>
+                              <option value="part2">Part 2 (Camper)</option>
+                            </select>
                             <button
                               type="button"
                               onClick={() => setNewPackFields(newPackFields.filter((_, i) => i !== idx))}
@@ -622,7 +633,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                         <div className="flex items-center justify-between pt-2">
                           <button
                             type="button"
-                            onClick={() => setNewPackFields([...newPackFields, { label: '', type: 'text', required: true }])}
+                            onClick={() => setNewPackFields([...newPackFields, { label: '', type: 'text', required: true, section: 'part1' }])}
                             className="text-xs font-bold text-slate-800 hover:underline flex items-center gap-1"
                           >
                             <Plus className="w-3.5 h-3.5" /> Add Field to Pack
@@ -762,17 +773,35 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           </div>
                         )}
 
-                        <div className="flex items-center gap-2 pt-1">
-                          <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={field.required}
-                              onChange={(e) => handleUpdateField(field.id, { required: e.target.checked })}
-                              className="rounded border-slate-300 text-slate-900 focus:ring-slate-800"
-                            />
-                            <span>Required Field</span>
-                          </label>
+                        {/* Section Target & Required Checkbox */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                              Deploy Section Target
+                            </label>
+                            <select
+                              value={field.section || 'part1'}
+                              onChange={(e) => handleUpdateField(field.id, { section: e.target.value as 'part1' | 'part2' })}
+                              className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-semibold focus:border-slate-800 focus:outline-none shadow-xs"
+                            >
+                              <option value="part1">Part 1: Church & Delegation Information</option>
+                              <option value="part2">Part 2: Camper Roster Listing</option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-5">
+                            <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(e) => handleUpdateField(field.id, { required: e.target.checked })}
+                                className="rounded border-slate-300 text-slate-900 focus:ring-slate-800"
+                              />
+                              <span>Required Field</span>
+                            </label>
+                          </div>
                         </div>
+
                       </div>
                     ))}
                   </div>
@@ -825,9 +854,14 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                 <div className="space-y-5">
                   {fields.map((f) => (
                     <div key={f.id} className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        {f.label} {f.required && <span className="text-rose-500">*</span>}
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          {f.label} {f.required && <span className="text-rose-500">*</span>}
+                        </label>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase px-2 py-0.5 rounded bg-slate-100">
+                          {f.section === 'part2' ? 'Part 2 (Camper)' : 'Part 1 (Church)'}
+                        </span>
+                      </div>
 
                       {f.type === 'textarea' ? (
                         <textarea
