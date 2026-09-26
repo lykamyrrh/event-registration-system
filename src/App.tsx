@@ -5,8 +5,7 @@ import {
   SystemLog, 
   SupabaseConfig, 
   FormTemplate, 
-  SubmissionStatus,
-  CamperItem
+  SubmissionStatus 
 } from './types';
 import { INITIAL_EVENTS, INITIAL_SUBMISSIONS, INITIAL_LOGS } from './data/mockData';
 import { getSavedSupabaseConfig, getSupabaseClient } from './lib/supabase';
@@ -48,6 +47,7 @@ export function App() {
   const [editingEvent, setEditingEvent] = useState<Partial<RegistrationEvent> | undefined>(undefined);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [publicFormEvent, setPublicFormEvent] = useState<RegistrationEvent | null>(null);
+  const [publicEventId, setPublicEventId] = useState<string | null>(null);
   const [selectedSubmissionsEventId, setSelectedSubmissionsEventId] = useState<string | undefined>(undefined);
 
   // Save to LocalStorage
@@ -67,6 +67,7 @@ export function App() {
   useEffect(() => {
     const client = getSupabaseClient();
     if (client) {
+      // Fetch events from Supabase in background
       client.from('events').select('*').then(({ data, error }) => {
         if (!error && data && data.length > 0) {
           console.log('Fetched events from live Supabase:', data);
@@ -74,6 +75,22 @@ export function App() {
       });
     }
   }, [supabaseConfig]);
+
+  // Handle public registration hash routes
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#/form/')) {
+        setPublicEventId(hash.replace('#/form/', ''));
+      } else {
+        setPublicEventId(null);
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Handler: Add or Update Event
   const handleSaveEvent = (savedEvent: RegistrationEvent) => {
@@ -139,9 +156,7 @@ export function App() {
       description: template.defaultDescription,
       fields: template.fields,
       submitButtonText: template.defaultType === 'pre-registration' ? 'Submit Pre-Registration' : 'Confirm Registration',
-      successMessage: 'Thank you! Your registration details have been received.',
-      externalLink: template.externalLink,
-      isMultiPart: template.isMultiPart
+      successMessage: 'Thank you! Your registration details have been received.'
     };
     setEditingEvent(draft);
     setIsFormBuilderOpen(true);
@@ -185,16 +200,15 @@ export function App() {
     setLogs([newLog, ...logs]);
   };
 
-  // Handler: Submit Public Registration (supports campers array)
-  const handleSubmitRegistration = (eventId: string, formData: Record<string, any>, campers?: CamperItem[]) => {
+  // Handler: Submit Public Registration
+  const handleSubmitRegistration = (eventId: string, formData: Record<string, any>) => {
     const now = new Date().toISOString();
     const newSubmission: RegistrationSubmission = {
       id: `sub-${Date.now()}`,
       eventId,
       submitted_at: now,
       status: 'confirmed',
-      data: formData,
-      campers
+      data: formData
     };
 
     setSubmissions([newSubmission, ...submissions]);
@@ -203,14 +217,13 @@ export function App() {
     setEvents(events.map(e => e.id === eventId ? { ...e, last_used_at: now } : e));
 
     const ev = events.find(e => e.id === eventId);
-    const churchName = formData.f_church_name || formData.f_company || 'Church Delegation';
-    const camperCount = campers ? campers.length : 1;
+    const registrantName = formData.f_name || formData.f_fullname || formData.f_guest_name || 'Attendee';
 
     const newLog: SystemLog = {
       id: `log-${Date.now()}`,
       timestamp: now,
-      action: 'New Pre-Registration Submitted',
-      details: `${churchName} pre-registered ${camperCount} camper(s) for ${ev?.title || 'Event'}`,
+      action: 'New Registration Submitted',
+      details: `${registrantName} registered for ${ev?.title || 'Event'}`,
       eventId,
       type: 'success'
     };
@@ -223,64 +236,21 @@ export function App() {
         event_id: eventId,
         submitted_at: now,
         status: 'confirmed',
-        data: { ...formData, campers }
+        data: formData
       }).then(({ error }) => {
         if (error) console.warn('Supabase submission insert error:', error);
       });
     }
   };
 
-  // Handler: Update Submission Status (e.g. Confirm Payment -> Paid)
+  // Handler: Update Submission Status (e.g. Check-in)
   const handleUpdateSubmissionStatus = (submissionId: string, newStatus: SubmissionStatus) => {
     setSubmissions(submissions.map(s => s.id === submissionId ? { ...s, status: newStatus } : s));
-
-    const sub = submissions.find(s => s.id === submissionId);
-    const church = sub?.data.f_church_name || sub?.data.f_name || 'Delegation';
-
-    const newLog: SystemLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      action: newStatus === 'paid' ? 'Payment Verified' : 'Status Updated',
-      details: `${church} delegation status set to ${newStatus.toUpperCase()}`,
-      type: 'success'
-    };
-    setLogs([newLog, ...logs]);
-  };
-
-  // Handler: Edit Record Data, Notes, & Campers Roster
-  const handleUpdateSubmissionData = (
-    submissionId: string, 
-    updatedData: Record<string, any>, 
-    updatedNotes?: string, 
-    updatedStatus?: SubmissionStatus,
-    updatedCampers?: CamperItem[]
-  ) => {
-    setSubmissions(submissions.map(s => {
-      if (s.id === submissionId) {
-        return {
-          ...s,
-          data: updatedData,
-          notes: updatedNotes !== undefined ? updatedNotes : s.notes,
-          status: updatedStatus || s.status,
-          campers: updatedCampers !== undefined ? updatedCampers : s.campers
-        };
-      }
-      return s;
-    }));
-
-    const newLog: SystemLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      action: 'Record & Roster Edited',
-      details: `Organizer updated delegation record & camper roster for ID #${submissionId.slice(-6)}`,
-      type: 'info'
-    };
-    setLogs([newLog, ...logs]);
   };
 
   // Handler: Delete Submission
   const handleDeleteSubmission = (submissionId: string) => {
-    if (confirm('Are you sure you want to delete this pre-registration record?')) {
+    if (confirm('Are you sure you want to delete this registration record?')) {
       setSubmissions(submissions.filter(s => s.id !== submissionId));
     }
   };
@@ -306,13 +276,15 @@ export function App() {
     }
   };
 
-  // Render Public Registration Page if selected
-  if (publicFormEvent) {
+  // Render Public Registration Page for hash route
+  if (publicEventId) {
     return (
       <PublicRegistrationPage
-        event={publicFormEvent}
-        onBackToDashboard={() => setPublicFormEvent(null)}
-        onSubmitRegistration={handleSubmitRegistration}
+        eventId={publicEventId}
+        onBackToDashboard={() => {
+          window.location.hash = '';
+          setPublicEventId(null);
+        }}
       />
     );
   }
@@ -348,7 +320,9 @@ export function App() {
               setIsFormBuilderOpen(true);
             }}
             onArchiveEvent={handleArchiveEvent}
-            onOpenPublicForm={(event) => setPublicFormEvent(event)}
+            onOpenPublicForm={(event) => {
+              window.location.hash = `/form/${event.id}`;
+            }}
             onViewSubmissions={(eventId) => {
               setSelectedSubmissionsEventId(eventId);
               setActiveTab('submissions');
@@ -366,7 +340,6 @@ export function App() {
             submissions={submissions}
             selectedEventId={selectedSubmissionsEventId}
             onUpdateSubmissionStatus={handleUpdateSubmissionStatus}
-            onUpdateSubmissionData={handleUpdateSubmissionData}
             onDeleteSubmission={handleDeleteSubmission}
           />
         )}
@@ -417,7 +390,7 @@ export function App() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-serif font-bold text-amber-300">AURUM REGISTRY</span>
-            <span>• AYOS Youth Camp 2-Part Pre-Registration System</span>
+            <span>• No-Code Event & Pre-Registration Platform</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400">
             <span>Supabase DB Enabled</span>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { RegistrationEvent, CamperItem, FormField } from '../types';
 import { 
   Calendar, 
@@ -21,16 +21,25 @@ import {
 } from 'lucide-react';
 
 interface PublicRegistrationPageProps {
-  event: RegistrationEvent;
+  eventId: string;
   onBackToDashboard: () => void;
-  onSubmitRegistration: (eventId: string, formData: Record<string, any>, campers?: CamperItem[]) => void;
 }
 
 export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
-  event,
-  onBackToDashboard,
-  onSubmitRegistration
+  eventId,
+  onBackToDashboard
 }) => {
+  const [event, setEvent] = useState<RegistrationEvent | null>(null);
+
+  useEffect(() => {
+    const savedEvents = localStorage.getItem('aurum_events');
+    if (savedEvents) {
+      const parsed = JSON.parse(savedEvents);
+      const found = parsed.find((e: RegistrationEvent) => e.id === eventId);
+      if (found) setEvent(found);
+    }
+  }, [eventId]);
+
   // Part 1 Form Data State
   const [formData, setFormData] = useState<Record<string, any>>({});
   
@@ -51,6 +60,10 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   const [submissionTime, setSubmissionTime] = useState('');
   const [submittedJsonPayload, setSubmittedJsonPayload] = useState<string>('');
   const [copiedJson, setCopiedJson] = useState(false);
+
+  if (!event) {
+    return <div className="p-10 text-center">Loading form...</div>;
+  }
 
   const isYouthCamp = event.category === 'camp' || event.isMultiPart || event.slug.includes('ayos');
 
@@ -170,7 +183,32 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     setSubmissionTime(nowTime);
     setSubmittedJsonPayload(JSON.stringify(payload, null, 2));
 
-    onSubmitRegistration(event.id, formData, isYouthCamp ? campers : undefined);
+    // Save the public submission using the same localStorage store as the dashboard.
+    const savedSubmissions = localStorage.getItem('aurum_submissions');
+    const existingSubmissions = savedSubmissions ? JSON.parse(savedSubmissions) : [];
+    const newSubmission = {
+      id: `sub-${Date.now()}`,
+      eventId: event.id,
+      submitted_at: new Date().toISOString(),
+      status: 'confirmed',
+      data: isYouthCamp ? { ...formData, campers } : formData
+    };
+    localStorage.setItem(
+      'aurum_submissions',
+      JSON.stringify([newSubmission, ...existingSubmissions])
+    );
+
+    const savedEvents = localStorage.getItem('aurum_events');
+    if (savedEvents) {
+      const events = JSON.parse(savedEvents);
+      const updatedEvents = events.map((e: RegistrationEvent) =>
+        e.id === event.id
+          ? { ...e, last_used_at: new Date().toISOString() }
+          : e
+      );
+      localStorage.setItem('aurum_events', JSON.stringify(updatedEvents));
+    }
+
     setIsSubmitted(true);
   };
 

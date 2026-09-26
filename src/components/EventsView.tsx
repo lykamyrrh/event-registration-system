@@ -47,8 +47,10 @@ export const EventsView: React.FC<EventsViewProps> = ({
     e.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // UPDATED FUNCTION
   const handleCopyLink = (event: RegistrationEvent) => {
-    const link = `${window.location.origin}/#reg-${event.slug}`;
+    // Generate a URL that App.tsx can read to render only the public form
+    const link = `${window.location.origin}/#/form/${event.id}`;
     navigator.clipboard.writeText(link);
     setCopiedId(event.id);
     setTimeout(() => setCopiedId(null), 2000);
