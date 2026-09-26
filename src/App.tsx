@@ -50,7 +50,7 @@ export function App() {
   const [publicEventId, setPublicEventId] = useState<string | null>(null);
   const [selectedSubmissionsEventId, setSelectedSubmissionsEventId] = useState<string | undefined>(undefined);
 
-  // Save to LocalStorage
+  // Keep a local cache, but use Supabase as the source of truth when connected.
   useEffect(() => {
     localStorage.setItem('aurum_events', JSON.stringify(events));
   }, [events]);
@@ -63,17 +63,65 @@ export function App() {
     localStorage.setItem('aurum_logs', JSON.stringify(logs));
   }, [logs]);
 
-  // Sync with Live Supabase if connected
+  // Load live events and registrations from Supabase when connected.
   useEffect(() => {
     const client = getSupabaseClient();
-    if (client) {
-      // Fetch events from Supabase in background
-      client.from('events').select('*').then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          console.log('Fetched events from live Supabase:', data);
-        }
-      });
-    }
+    if (!client) return;
+
+    const loadFromSupabase = async () => {
+      const [
+        { data: eventRows, error: eventError },
+        { data: registrationRows, error: registrationError }
+      ] = await Promise.all([
+        client.from('events').select('*').order('created_at', { ascending: false }),
+        client.from('registrations').select('*').order('submitted_at', { ascending: false })
+      ]);
+
+      if (eventError) {
+        console.warn('Supabase events load error:', eventError);
+      } else if (eventRows && eventRows.length > 0) {
+        const mappedEvents: RegistrationEvent[] = eventRows.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          slug: row.slug,
+          type: row.type,
+          category: row.category,
+          description: row.description || '',
+          location: row.location || undefined,
+          eventDate: row.event_date || undefined,
+          status: row.status,
+          themeBanner: row.theme_banner || undefined,
+          fields: Array.isArray(row.fields) ? row.fields : [],
+          created_at: row.created_at,
+          last_used_at: row.last_used_at,
+          maxRegistrations: row.max_registrations ?? undefined,
+          submitButtonText: row.submit_button_text ?? undefined,
+          successMessage: row.success_message ?? undefined,
+          externalLink: row.external_link ?? undefined,
+          isMultiPart: row.is_multi_part ?? undefined
+        }));
+
+        // Supabase is authoritative when connected.
+        setEvents(mappedEvents);
+      }
+
+      if (registrationError) {
+        console.warn('Supabase registrations load error:', registrationError);
+      } else if (registrationRows && registrationRows.length > 0) {
+        const mappedSubmissions: RegistrationSubmission[] = registrationRows.map((row: any) => ({
+          id: row.id,
+          eventId: row.event_id,
+          submitted_at: row.submitted_at,
+          status: row.status,
+          data: row.data || {},
+          notes: row.notes || undefined
+        }));
+
+        setSubmissions(mappedSubmissions);
+      }
+    };
+
+    loadFromSupabase();
   }, [supabaseConfig]);
 
   // Handle public registration hash routes
@@ -93,57 +141,76 @@ export function App() {
   }, []);
 
   // Handler: Add or Update Event
-  const handleSaveEvent = (savedEvent: RegistrationEvent) => {
+  const handleSaveEvent = async (savedEvent: RegistrationEvent) => {
+    const client = getSupabaseClient();
+    const existingEvent = events.find(e => e.id === savedEvent.id);
     const existingIndex = events.findIndex(e => e.id === savedEvent.id);
     const now = new Date().toISOString();
 
-    let updatedEvents: RegistrationEvent[];
-    let actionText = '';
+    // New Supabase rows use a real UUID. Existing events keep their current UUID.
+    const eventId =
+      existingEvent?.id ||
+      (savedEvent.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(savedEvent.id)
+        ? savedEvent.id
+        : crypto.randomUUID());
 
-    if (existingIndex >= 0) {
-      updatedEvents = events.map(e => e.id === savedEvent.id ? savedEvent : e);
-      actionText = `Updated registration site "${savedEvent.title}"`;
-    } else {
-      updatedEvents = [savedEvent, ...events];
-      actionText = `Created new registration site "${savedEvent.title}"`;
-    }
+    const eventToSave: RegistrationEvent = {
+      ...savedEvent,
+      id: eventId,
+      created_at: savedEvent.created_at || now,
+      last_used_at: savedEvent.last_used_at || now
+    };
+
+    const updatedEvents =
+      existingIndex >= 0
+        ? events.map(e => e.id === savedEvent.id ? eventToSave : e)
+        : [eventToSave, ...events];
 
     setEvents(updatedEvents);
     setIsFormBuilderOpen(false);
     setEditingEvent(undefined);
 
-    // Log action
+    const actionText =
+      existingIndex >= 0
+        ? `Updated registration site "${eventToSave.title}"`
+        : `Created new registration site "${eventToSave.title}"`;
+
     const newLog: SystemLog = {
       id: `log-${Date.now()}`,
       timestamp: now,
       action: existingIndex >= 0 ? 'Event Updated' : 'Event Created',
       details: actionText,
-      eventId: savedEvent.id,
+      eventId: eventToSave.id,
       type: 'info'
     };
-    setLogs([newLog, ...logs]);
 
-    // Push to Supabase if connected
-    const client = getSupabaseClient();
+    setLogs(prev => [newLog, ...prev]);
+
     if (client) {
-      client.from('events').upsert({
-        id: savedEvent.id,
-        title: savedEvent.title,
-        slug: savedEvent.slug,
-        type: savedEvent.type,
-        category: savedEvent.category,
-        description: savedEvent.description,
-        location: savedEvent.location,
-        event_date: savedEvent.eventDate,
-        status: savedEvent.status,
-        fields: savedEvent.fields,
-        submit_button_text: savedEvent.submitButtonText,
-        success_message: savedEvent.successMessage,
-        created_at: savedEvent.created_at,
-        last_used_at: savedEvent.last_used_at
-      }).then(({ error }) => {
-        if (error) console.warn('Supabase sync error:', error);
-      });
+      const { error } = await client.from('events').upsert({
+        id: eventToSave.id,
+        title: eventToSave.title,
+        slug: eventToSave.slug,
+        type: eventToSave.type,
+        category: eventToSave.category,
+        description: eventToSave.description,
+        location: eventToSave.location || null,
+        event_date: eventToSave.eventDate || null,
+        status: eventToSave.status,
+        fields: eventToSave.fields || [],
+        max_registrations: eventToSave.maxRegistrations ?? null,
+        submit_button_text: eventToSave.submitButtonText || null,
+        success_message: eventToSave.successMessage || null,
+        created_at: eventToSave.created_at,
+        last_used_at: eventToSave.last_used_at
+      }, { onConflict: 'id' });
+
+      if (error) {
+        console.error('Supabase event save error:', error);
+        alert(`Event was saved locally, but Supabase could not save it.\n\n${error.message}`);
+      } else {
+        console.log('Event saved to Supabase:', eventToSave.id);
+      }
     }
   };
 
@@ -170,6 +237,16 @@ export function App() {
     const updated = events.map(e => e.id === eventId ? { ...e, status: 'archived' as const } : e);
     setEvents(updated);
 
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('events')
+        .update({ status: 'archived' })
+        .eq('id', eventId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase archive error:', error);
+        });
+    }
+
     const newLog: SystemLog = {
       id: `log-${Date.now()}`,
       timestamp: new Date().toISOString(),
@@ -188,6 +265,16 @@ export function App() {
 
     const updated = events.map(e => e.id === eventId ? { ...e, status: 'active' as const } : e);
     setEvents(updated);
+
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('events')
+        .update({ status: 'active' })
+        .eq('id', eventId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase restore error:', error);
+        });
+    }
 
     const newLog: SystemLog = {
       id: `log-${Date.now()}`,
@@ -264,12 +351,32 @@ export function App() {
   // Handler: Update Submission Status (e.g. Check-in)
   const handleUpdateSubmissionStatus = (submissionId: string, newStatus: SubmissionStatus) => {
     setSubmissions(submissions.map(s => s.id === submissionId ? { ...s, status: newStatus } : s));
+
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('registrations')
+        .update({ status: newStatus })
+        .eq('id', submissionId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase submission status update error:', error);
+        });
+    }
   };
 
   // Handler: Delete Submission
   const handleDeleteSubmission = (submissionId: string) => {
     if (confirm('Are you sure you want to delete this registration record?')) {
       setSubmissions(submissions.filter(s => s.id !== submissionId));
+
+      const client = getSupabaseClient();
+      if (client) {
+        client.from('registrations')
+          .delete()
+          .eq('id', submissionId)
+          .then(({ error }) => {
+            if (error) console.warn('Supabase submission delete error:', error);
+          });
+      }
     }
   };
 

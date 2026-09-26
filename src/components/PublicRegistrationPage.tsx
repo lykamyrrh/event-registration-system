@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { RegistrationEvent, CamperItem, FormField } from '../types';
+import { getSupabaseClient } from '../lib/supabase';
 import { 
   Calendar, 
   MapPin, 
@@ -32,12 +33,56 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   const [event, setEvent] = useState<RegistrationEvent | null>(null);
 
   useEffect(() => {
-    const savedEvents = localStorage.getItem('aurum_events');
-    if (savedEvents) {
-      const parsed = JSON.parse(savedEvents);
-      const found = parsed.find((e: RegistrationEvent) => e.id === eventId);
-      if (found) setEvent(found);
-    }
+    const loadEvent = async () => {
+      const client = getSupabaseClient();
+
+      if (client) {
+        const { data, error } = await client
+          .from('events')
+          .select('*')
+          .eq('id', eventId)
+          .single();
+
+        if (!error && data) {
+          const loadedEvent: RegistrationEvent = {
+            id: data.id,
+            title: data.title,
+            slug: data.slug,
+            type: data.type,
+            category: data.category,
+            description: data.description || '',
+            location: data.location || undefined,
+            eventDate: data.event_date || undefined,
+            status: data.status,
+            fields: Array.isArray(data.fields) ? data.fields : [],
+            created_at: data.created_at,
+            last_used_at: data.last_used_at,
+            maxRegistrations: data.max_registrations ?? undefined,
+            submitButtonText: data.submit_button_text || undefined,
+            successMessage: data.success_message || undefined
+          };
+
+          setEvent(loadedEvent);
+          return;
+        }
+
+        console.warn('Could not load event from Supabase:', error);
+      }
+
+      // Local fallback for development/offline use.
+      const savedEvents = localStorage.getItem('aurum_events');
+      if (savedEvents) {
+        try {
+          const parsed = JSON.parse(savedEvents);
+          const found = parsed.find((e: RegistrationEvent) => e.id === eventId);
+          if (found) setEvent(found);
+        } catch (error) {
+          console.error('Failed to read local events:', error);
+        }
+      }
+    };
+
+    loadEvent();
   }, [eventId]);
 
   // Part 1 Form Data State
@@ -100,7 +145,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Client-side validation: Part 1
@@ -183,30 +228,67 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     setSubmissionTime(nowTime);
     setSubmittedJsonPayload(JSON.stringify(payload, null, 2));
 
-    // Save the public submission using the same localStorage store as the dashboard.
-    const savedSubmissions = localStorage.getItem('aurum_submissions');
-    const existingSubmissions = savedSubmissions ? JSON.parse(savedSubmissions) : [];
-    const newSubmission = {
-      id: `sub-${Date.now()}`,
-      eventId: event.id,
-      submitted_at: new Date().toISOString(),
-      status: 'confirmed',
-      data: isYouthCamp ? { ...formData, campers } : formData
-    };
-    localStorage.setItem(
-      'aurum_submissions',
-      JSON.stringify([newSubmission, ...existingSubmissions])
-    );
+    const submissionData = isYouthCamp
+      ? { ...formData, campers, reference_code: subId }
+      : { ...formData, reference_code: subId };
 
-    const savedEvents = localStorage.getItem('aurum_events');
-    if (savedEvents) {
-      const events = JSON.parse(savedEvents);
-      const updatedEvents = events.map((e: RegistrationEvent) =>
-        e.id === event.id
-          ? { ...e, last_used_at: new Date().toISOString() }
-          : e
+    const client = getSupabaseClient();
+
+    if (client) {
+      const { error } = await client
+        .from('registrations')
+        .insert({
+          event_id: event.id,
+          status: 'confirmed',
+          data: submissionData
+        });
+
+      if (error) {
+        console.error('Failed to save registration to Supabase:', error);
+        alert('Registration could not be saved. Please try again.');
+        return;
+      }
+
+      // Keep the event's last-used timestamp updated in Supabase.
+      const { error: eventUpdateError } = await client
+        .from('events')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('id', event.id);
+
+      if (eventUpdateError) {
+        console.warn('Registration saved, but event timestamp could not be updated:', eventUpdateError);
+      }
+    } else {
+      // Local fallback for development/offline use.
+      const savedSubmissions = localStorage.getItem('aurum_submissions');
+      const existingSubmissions = savedSubmissions ? JSON.parse(savedSubmissions) : [];
+      const newSubmission = {
+        id: `sub-${Date.now()}`,
+        eventId: event.id,
+        submitted_at: new Date().toISOString(),
+        status: 'confirmed',
+        data: submissionData
+      };
+
+      localStorage.setItem(
+        'aurum_submissions',
+        JSON.stringify([newSubmission, ...existingSubmissions])
       );
-      localStorage.setItem('aurum_events', JSON.stringify(updatedEvents));
+
+      const savedEvents = localStorage.getItem('aurum_events');
+      if (savedEvents) {
+        try {
+          const events = JSON.parse(savedEvents);
+          const updatedEvents = events.map((e: RegistrationEvent) =>
+            e.id === event.id
+              ? { ...e, last_used_at: new Date().toISOString() }
+              : e
+          );
+          localStorage.setItem('aurum_events', JSON.stringify(updatedEvents));
+        } catch (error) {
+          console.error('Failed to update local event timestamp:', error);
+        }
+      }
     }
 
     setIsSubmitted(true);
