@@ -41,6 +41,14 @@ export interface CamperItem {
   gender: string;
 }
 
+export interface CustomInjectorPack {
+  id: string;
+  name: string;
+  description: string;
+  iconName?: string;
+  fields: FormField[];
+}
+
 export interface RegistrationEvent {
   id: string;
   title: string;
