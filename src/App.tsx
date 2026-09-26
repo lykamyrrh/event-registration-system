@@ -243,6 +243,24 @@ export function App() {
     }
   };
 
+  // Handler: Update Submission Data
+  const handleUpdateSubmissionData = (submissionId: string, updatedData: Record<string, any>) => {
+    setSubmissions(submissions.map(s =>
+      s.id === submissionId ? { ...s, data: updatedData } : s
+    ));
+
+    // Push the updated submission data to Supabase if connected
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('registrations')
+        .update({ data: updatedData })
+        .eq('id', submissionId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase submission update error:', error);
+        });
+    }
+  };
+
   // Handler: Update Submission Status (e.g. Check-in)
   const handleUpdateSubmissionStatus = (submissionId: string, newStatus: SubmissionStatus) => {
     setSubmissions(submissions.map(s => s.id === submissionId ? { ...s, status: newStatus } : s));
@@ -339,6 +357,7 @@ export function App() {
             events={events}
             submissions={submissions}
             selectedEventId={selectedSubmissionsEventId}
+            onUpdateSubmissionData={handleUpdateSubmissionData}
             onUpdateSubmissionStatus={handleUpdateSubmissionStatus}
             onDeleteSubmission={handleDeleteSubmission}
           />
