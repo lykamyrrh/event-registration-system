@@ -7,7 +7,6 @@ import {
   FormTemplate, 
   SubmissionStatus 
 } from './types';
-import { INITIAL_EVENTS, INITIAL_SUBMISSIONS, INITIAL_LOGS } from './data/mockData';
 import { getSavedSupabaseConfig, getSupabaseClient } from './lib/supabase';
 
 // Components
@@ -27,17 +26,17 @@ export function App() {
   // Persistent State
   const [events, setEvents] = useState<RegistrationEvent[]>(() => {
     const saved = localStorage.getItem('aurum_events');
-    return saved ? JSON.parse(saved) : INITIAL_EVENTS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [submissions, setSubmissions] = useState<RegistrationSubmission[]>(() => {
     const saved = localStorage.getItem('aurum_submissions');
-    return saved ? JSON.parse(saved) : INITIAL_SUBMISSIONS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [logs, setLogs] = useState<SystemLog[]>(() => {
     const saved = localStorage.getItem('aurum_logs');
-    return saved ? JSON.parse(saved) : INITIAL_LOGS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getSavedSupabaseConfig);
