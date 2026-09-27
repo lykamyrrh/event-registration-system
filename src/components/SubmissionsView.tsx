@@ -90,8 +90,48 @@ export async function saveCampers(
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Resolves the camper list for a submission, trying sources in order:
+ *
+ *   1. `sub.campers` — mapped camelCase array (from App.tsx join)
+ *   2. `sub.campers_raw` — raw snake_case rows from Supabase join
+ *   3. `sub.data.campers` — JSON snapshot saved by the public form
+ *   4. Placeholder for single-registrant submissions
+ *
+ * This guarantees the modal never shows an empty roster when real
+ * camper data exists anywhere.
+ */
 const getCampersForSubmission = (sub: RegistrationSubmission): CamperItem[] => {
+  // 1. Joined + mapped campers table
   if (sub.campers && sub.campers.length > 0) return sub.campers;
+
+  // 2. Raw rows from the Supabase join (in case App.tsx hasn't mapped them)
+  const rawJoined = (sub as any).campers_raw;
+  if (Array.isArray(rawJoined) && rawJoined.length > 0) {
+    return rawJoined.map((c: any, i: number) => ({
+      id: c.id || `joined_${i}`,
+      fullName: c.full_name || c.fullName || '',
+      badgeName: c.badge_name || c.badgeName || '',
+      age: c.age != null ? String(c.age) : '',
+      gradeLevel: c.grade_level || c.gradeLevel || 'junior high',
+      gender: c.gender || 'male'
+    }));
+  }
+
+  // 3. JSON snapshot stored inside data.campers
+  const fromData = (sub.data as any)?.campers;
+  if (Array.isArray(fromData) && fromData.length > 0) {
+    return fromData.map((c: any, i: number) => ({
+      id: c.id || `data_${i}`,
+      fullName: c.fullName || c.full_name || '',
+      badgeName: c.badgeName || c.badge_name || '',
+      age: c.age != null ? String(c.age) : '',
+      gradeLevel: c.gradeLevel || c.grade_level || 'junior high',
+      gender: c.gender || 'male'
+    }));
+  }
+
+  // 4. Last-resort placeholder for single-registrant submissions
   return [
     {
       id: 'single',
@@ -484,7 +524,9 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
         const subRole = String(
           sub.data.f_attendee_role || sub.data.f_role || ''
         ).toLowerCase();
-        const camperRoles = (sub.campers || []).map(() => 'camper').join(' ');
+        const camperRoles = getCampersForSubmission(sub)
+          .map(() => 'camper')
+          .join(' ');
         const combined = `${subRole} ${camperRoles}`;
         if (roleFilter === 'camper' && !combined.includes('camper')) return false;
         if (roleFilter === 'pastor' && !combined.includes('pastor')) return false;
@@ -503,7 +545,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
       if (academicFilter !== 'all') {
         const subLevel = String(sub.data.f_academic_level || '');
-        const camperLevels = (sub.campers || [])
+        const camperLevels = getCampersForSubmission(sub)
           .map(c => c.gradeLevel)
           .join(' ');
         const combined = `${subLevel} ${camperLevels}`;
@@ -516,7 +558,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           .map(v => (Array.isArray(v) ? v.join(' ') : String(v)))
           .join(' ')
           .toLowerCase();
-        const campersText = (sub.campers || [])
+        const campersText = getCampersForSubmission(sub)
           .map(c => `${c.fullName} ${c.badgeName} ${c.gradeLevel}`)
           .join(' ')
           .toLowerCase();
@@ -545,7 +587,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
   const getEvent = (eventId: string) => events.find(e => e.id === eventId);
 
   const totalCampersInView = filteredSubmissions.reduce(
-    (acc, sub) => acc + (sub.campers ? sub.campers.length : 1),
+    (acc, sub) => acc + getCampersForSubmission(sub).length,
     0
   );
 
@@ -559,7 +601,9 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     setEditFieldsData({ ...sub.data });
     setEditNotes(sub.notes || '');
     setEditStatus(sub.status);
-    setEditCampers(sub.campers ? sub.campers.map(c => ({ ...c })) : []);
+    setEditCampers(
+      getCampersForSubmission(sub).map(c => ({ ...c }))
+    );
     // Close the modal so the inline editor is visible
     setDetailSubmissionId(null);
   };
@@ -662,14 +706,12 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
             s.data.f_name ||
             'Leader'
         );
-        const roster = s.campers
-          ? s.campers
-              .map(
-                c =>
-                  `${c.fullName} (${c.badgeName}, Age ${c.age}, ${c.gradeLevel})`
-              )
-              .join('; ')
-          : 'Single Registrant';
+        const roster = getCampersForSubmission(s)
+          .map(
+            c =>
+              `${c.fullName} (${c.badgeName}, Age ${c.age}, ${c.gradeLevel})`
+          )
+          .join('; ');
 
         const row = [
           `"${s.id}"`,

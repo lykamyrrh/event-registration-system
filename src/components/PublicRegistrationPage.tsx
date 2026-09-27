@@ -22,6 +22,37 @@ interface PublicRegistrationPageProps {
   onBackToDashboard: () => void;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Persists camper rows for a submission into the `campers` table.
+ * No-ops silently if Supabase isn't available or the list is empty.
+ */
+const persistCampersForSubmission = async (
+  client: ReturnType<typeof getSupabaseClient> | null,
+  submissionId: string,
+  eventId: string,
+  campers: CamperItem[]
+) => {
+  if (!client || !submissionId || !campers?.length) return;
+
+  const rows = campers.map((c, idx) => ({
+    submission_id: submissionId,
+    event_id: eventId,
+    full_name: c.fullName || 'Unnamed',
+    badge_name: c.badgeName || null,
+    age: c.age != null && String(c.age).trim() !== '' ? String(c.age) : null,
+    grade_level: c.gradeLevel || null,
+    gender: c.gender || null,
+    sort_order: idx
+  }));
+
+  const { error } = await client.from('campers').insert(rows);
+  if (error) console.warn('Supabase campers insert error:', error);
+};
+
 export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   eventId,
   onBackToDashboard
@@ -404,6 +435,17 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
           console.error('Registration insert error:', insertError);
         } else if (inserted) {
           savedRegistrationId = inserted.id;
+
+          // ⬅️ NEW: mirror campers into the dedicated `campers` table so
+          // the organizer dashboard's join finds them immediately.
+          if (isYouthCamp && campers.length > 0) {
+            await persistCampersForSubmission(
+              client,
+              inserted.id,
+              event.id,
+              campers
+            );
+          }
         }
       } catch (err) {
         console.error('Supabase registration error:', err);
