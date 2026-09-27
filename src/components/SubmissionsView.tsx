@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RegistrationEvent,
   RegistrationSubmission,
   SubmissionStatus,
   CamperItem
 } from '../types';
+import { Pagination } from './Pagination';
 import {
   Table,
   Search,
@@ -16,7 +17,6 @@ import {
   AlertCircle,
   Building2,
   CheckCircle2,
-  Edit3,
   GraduationCap,
   Users,
   Link2,
@@ -46,16 +46,12 @@ interface SubmissionsViewProps {
  *   2. `sub.campers_raw` — raw snake_case rows from Supabase join
  *   3. `sub.data.campers` — JSON snapshot saved by the public form
  *   4. Placeholder for single-registrant submissions
- *
- * Exported so per-event views can reuse the same fallback logic.
  */
 export const getCampersForSubmission = (
   sub: RegistrationSubmission
 ): CamperItem[] => {
-  // 1. Joined + mapped campers table
   if (sub.campers && sub.campers.length > 0) return sub.campers;
 
-  // 2. Raw rows from the Supabase join
   const rawJoined = (sub as any).campers_raw;
   if (Array.isArray(rawJoined) && rawJoined.length > 0) {
     return rawJoined.map((c: any, i: number) => ({
@@ -68,7 +64,6 @@ export const getCampersForSubmission = (
     }));
   }
 
-  // 3. JSON snapshot stored inside data.campers
   const fromData = (sub.data as any)?.campers;
   if (Array.isArray(fromData) && fromData.length > 0) {
     return fromData.map((c: any, i: number) => ({
@@ -81,7 +76,6 @@ export const getCampersForSubmission = (
     }));
   }
 
-  // 4. Last-resort placeholder for single-registrant submissions
   return [
     {
       id: 'single',
@@ -412,10 +406,17 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
   const [academicFilter, setAcademicFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   // Which submission's detail modal is open
   const [detailSubmissionId, setDetailSubmissionId] = useState<string | null>(
     null
   );
+
+  // Anchor for scroll-to-top on page change
+  const listTopRef = useRef<HTMLDivElement | null>(null);
 
   const detailSubmission = useMemo(
     () => submissions.find(s => s.id === detailSubmissionId) || null,
@@ -513,8 +514,37 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     searchQuery
   ]);
 
+  // ── Reset to page 1 whenever any filter changes ───────────
+  useEffect(() => {
+    setPage(1);
+  }, [
+    selectedEventId,
+    statusFilter,
+    churchFilter,
+    roleFilter,
+    academicFilter,
+    searchQuery,
+    pageSize
+  ]);
+
+  // ── Paginated slice ───────────────────────────────────────
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSubmissions.slice(start, start + pageSize);
+  }, [filteredSubmissions, page, pageSize]);
+
+  // ── Scroll-to-top on page change ──────────────────────────
+  useEffect(() => {
+    if (listTopRef.current) {
+      const top = listTopRef.current.offsetTop - 24;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
   const getEvent = (eventId: string) => events.find(e => e.id === eventId);
 
+  // Stats reflect the entire filtered set (not just the current page)
   const totalCampersInView = filteredSubmissions.reduce(
     (acc, sub) => acc + getCampersForSubmission(sub).length,
     0
@@ -796,6 +826,9 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
         </div>
       </div>
 
+      {/* Anchor used for scroll-to-top on page change */}
+      <div ref={listTopRef} />
+
       {/* Submissions Table */}
       <div className="rounded-2xl bg-white border border-navy-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
@@ -812,7 +845,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
             </thead>
 
             <tbody className="divide-y divide-navy-100">
-              {filteredSubmissions.length === 0 ? (
+              {paginated.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -824,7 +857,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredSubmissions.map(sub => {
+                paginated.map(sub => {
                   const ev = getEvent(sub.eventId);
                   const church = String(
                     sub.data.f_church_name ||
@@ -965,6 +998,19 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {filteredSubmissions.length > 0 && (
+        <Pagination
+          totalItems={filteredSubmissions.length}
+          currentPage={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          itemLabel="submissions"
+          pageSizeOptions={[10, 25, 50, 100]}
+        />
+      )}
 
       {/* ═══ DETAIL MODAL ═══ */}
       {detailSubmission && (
