@@ -213,7 +213,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // ── Derived stats (full set, not paginated) ───────────────
+  // ── Derived stats ─────────────────────────────────────────
   const totalCampers = useMemo(
     () => submissions.reduce((acc, s) => acc + resolveCampers(s).length, 0),
     [submissions]
@@ -723,7 +723,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         </DetailBlock>
                       </div>
 
-                      {/* ── Camper roster ──────────────────── */}
+                      {/* ── Camper roster (read-only) ──────── */}
                       <div className="px-5 py-4 border-t border-navy-100">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
@@ -798,6 +798,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                   {/* ── Inline editor ─────────────────────── */}
                   {isEditing && (
                     <div className="p-5 space-y-5">
+                      {/* Status + notes */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-ivory border border-navy-200">
                         <div>
                           <label className="block text-xs font-bold text-navy-900 mb-1">
@@ -833,6 +834,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         </div>
                       </div>
 
+                      {/* Delegation fields */}
                       <div className="p-4 rounded-2xl bg-ivory border border-navy-200 space-y-3">
                         <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">
                           Delegation Fields
@@ -870,9 +872,11 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-2xl bg-ivory border border-navy-200 space-y-4">
+                      {/* ── Camper roster editor (TABLE) ──── */}
+                      <div className="p-4 rounded-2xl bg-ivory border border-navy-200 space-y-3">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">
+                          <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5" />
                             Camper Roster ({editCampers.length})
                           </h4>
                           <button
@@ -885,112 +889,156 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         </div>
 
                         {editCampers.length === 0 ? (
-                          <p className="text-xs text-navy-900/50 italic text-center py-3">
-                            No campers yet. Click "Add Camper" to add one.
-                          </p>
+                          <div className="rounded-xl border border-dashed border-navy-200 bg-white p-6 text-center">
+                            <p className="text-xs text-navy-900/50 italic">
+                              No campers yet. Click "Add Camper" to add one.
+                            </p>
+                          </div>
                         ) : (
-                          <div className="space-y-3">
-                            {editCampers.map((c, idx) => (
-                              <div
-                                key={c.id}
-                                className="p-3.5 rounded-xl bg-white border border-navy-200 space-y-2"
-                              >
-                                <div className="flex items-center justify-between text-xs font-bold text-navy-900">
-                                  <span>Camper #{idx + 1}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeEditCamper(c.id)}
-                                    className="text-rose-700 text-[11px] font-semibold hover:text-rose-900"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                  <input
-                                    type="text"
-                                    value={c.fullName}
-                                    placeholder="Full Name"
-                                    onChange={e =>
-                                      updateEditCamper(
-                                        c.id,
-                                        'fullName',
-                                        e.target.value
-                                      )
-                                    }
-                                    className="px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={c.badgeName}
-                                    placeholder="Badge Name"
-                                    onChange={e =>
-                                      updateEditCamper(
-                                        c.id,
-                                        'badgeName',
-                                        e.target.value
-                                      )
-                                    }
-                                    className="px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs"
-                                  />
-                                  <input
-                                    type="number"
-                                    value={c.age}
-                                    placeholder="Age"
-                                    onChange={e =>
-                                      updateEditCamper(
-                                        c.id,
-                                        'age',
-                                        e.target.value
-                                      )
-                                    }
-                                    className="px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs"
-                                  />
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <select
-                                    value={c.gradeLevel}
-                                    onChange={e =>
-                                      updateEditCamper(
-                                        c.id,
-                                        'gradeLevel',
-                                        e.target.value
-                                      )
-                                    }
-                                    className="px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium"
-                                  >
-                                    <option value="elementary">
-                                      Elementary
-                                    </option>
-                                    <option value="junior high">
-                                      Junior High
-                                    </option>
-                                    <option value="senior high">
-                                      Senior High
-                                    </option>
-                                    <option value="college">College</option>
-                                    <option value="working">
-                                      Working / Professional
-                                    </option>
-                                  </select>
-                                  <select
-                                    value={c.gender}
-                                    onChange={e =>
-                                      updateEditCamper(
-                                        c.id,
-                                        'gender',
-                                        e.target.value
-                                      )
-                                    }
-                                    className="px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium"
-                                  >
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                  </select>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="rounded-xl border border-navy-200 bg-white overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs min-w-[820px]">
+                                <thead className="bg-ivory-dark">
+                                  <tr className="text-left text-[10px] uppercase tracking-wider text-navy-900/70">
+                                    <th className="px-3 py-2 font-black w-12">
+                                      #
+                                    </th>
+                                    <th className="px-3 py-2 font-black min-w-[200px]">
+                                      Full Name
+                                    </th>
+                                    <th className="px-3 py-2 font-black min-w-[160px]">
+                                      Badge Name
+                                    </th>
+                                    <th className="px-3 py-2 font-black w-24">
+                                      Age
+                                    </th>
+                                    <th className="px-3 py-2 font-black min-w-[140px]">
+                                      Grade Level
+                                    </th>
+                                    <th className="px-3 py-2 font-black min-w-[120px]">
+                                      Gender
+                                    </th>
+                                    <th className="px-3 py-2 font-black w-20 text-right">
+                                      {/* actions */}
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-navy-100">
+                                  {editCampers.map((c, idx) => (
+                                    <tr
+                                      key={c.id}
+                                      className="hover:bg-gold-50/40"
+                                    >
+                                      <td className="px-3 py-2 text-navy-900/60 font-mono align-middle">
+                                        {idx + 1}
+                                      </td>
+                                      <td className="px-3 py-2 align-middle">
+                                        <input
+                                          type="text"
+                                          value={c.fullName}
+                                          placeholder="Full Name"
+                                          onChange={e =>
+                                            updateEditCamper(
+                                              c.id,
+                                              'fullName',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 align-middle">
+                                        <input
+                                          type="text"
+                                          value={c.badgeName}
+                                          placeholder="Badge Name"
+                                          onChange={e =>
+                                            updateEditCamper(
+                                              c.id,
+                                              'badgeName',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 align-middle">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="99"
+                                          value={c.age}
+                                          placeholder="Age"
+                                          onChange={e =>
+                                            updateEditCamper(
+                                              c.id,
+                                              'age',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 align-middle">
+                                        <select
+                                          value={c.gradeLevel}
+                                          onChange={e =>
+                                            updateEditCamper(
+                                              c.id,
+                                              'gradeLevel',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium focus:border-gold-500 focus:outline-none"
+                                        >
+                                          <option value="elementary">
+                                            Elementary
+                                          </option>
+                                          <option value="junior high">
+                                            Junior High
+                                          </option>
+                                          <option value="senior high">
+                                            Senior High
+                                          </option>
+                                          <option value="college">
+                                            College
+                                          </option>
+                                          <option value="working">
+                                            Working / Professional
+                                          </option>
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2 align-middle">
+                                        <select
+                                          value={c.gender}
+                                          onChange={e =>
+                                            updateEditCamper(
+                                              c.id,
+                                              'gender',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium focus:border-gold-500 focus:outline-none"
+                                        >
+                                          <option value="male">Male</option>
+                                          <option value="female">Female</option>
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2 align-middle text-right">
+                                        <button
+                                          type="button"
+                                          onClick={() => removeEditCamper(c.id)}
+                                          title="Remove camper"
+                                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-navy-200 bg-white text-rose-700 hover:bg-rose-50 hover:border-rose-300 transition"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         )}
                       </div>
