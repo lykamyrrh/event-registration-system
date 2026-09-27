@@ -4,10 +4,11 @@ import {
   RegistrationSubmission,
   SystemLog,
   SupabaseConfig,
-  FormTemplate
+  FormTemplate,
+  CamperItem
 } from './types';
 import type { SubmissionStatus } from './types';
-import { getSavedSupabaseConfig, getSupabaseClient } from './lib/supabase';
+import { getSupabaseClient, getSavedSupabaseConfig } from './lib/supabase';
 
 // Components
 import { Navbar } from './components/Navbar';
@@ -32,7 +33,6 @@ const safeRandomUUID = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  // RFC4122 v4 fallback
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -42,6 +42,58 @@ const safeRandomUUID = (): string => {
 
 const makeLogId = (): string =>
   `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+// ═════════════════════════════════════════════════════════════
+// Camper mapper + persistence helpers
+// ═════════════════════════════════════════════════════════════
+const mapCamperRow = (c: any): CamperItem => ({
+  id: c.id,
+  fullName: c.full_name || '',
+  badgeName: c.badge_name || '',
+  age: c.age != null ? String(c.age) : '',
+  gradeLevel: c.grade_level || 'junior high',
+  gender: c.gender || 'male'
+});
+
+/**
+ * Replaces all camper rows for a given submission.
+ * Safe to call with an empty array (clears rows).
+ * No-ops silently when the Supabase client is unavailable.
+ */
+const persistCampers = async (
+  client: ReturnType<typeof getSupabaseClient> | null,
+  submissionId: string,
+  eventId: string,
+  campers: CamperItem[]
+) => {
+  if (!client) return;
+
+  const { error: delErr } = await client
+    .from('campers')
+    .delete()
+    .eq('submission_id', submissionId);
+
+  if (delErr) {
+    console.warn('Supabase campers delete error:', delErr);
+    return;
+  }
+
+  if (!campers?.length) return;
+
+  const rows = campers.map((c, idx) => ({
+    submission_id: submissionId,
+    event_id: eventId,
+    full_name: c.fullName || 'Unnamed',
+    badge_name: c.badgeName || null,
+    age: c.age || null,
+    grade_level: c.gradeLevel || null,
+    gender: c.gender || null,
+    sort_order: idx
+  }));
+
+  const { error: insErr } = await client.from('campers').insert(rows);
+  if (insErr) console.warn('Supabase campers insert error:', insErr);
+};
 
 // ─────────────────────────────────────────────────────────────
 // App
@@ -82,8 +134,6 @@ export function App() {
     string | undefined
   >(undefined);
 
-  // Track whether the user has already synced once, so we don't wipe
-  // local-only data on the initial connect.
   const hasSyncedRef = useRef(false);
 
   // ── Log helper ─────────────────────────────────────────────
@@ -120,12 +170,11 @@ export function App() {
     localStorage.setItem('aurum_logs', JSON.stringify(logs));
   }, [logs]);
 
-  // ── Load from Supabase when config changes ─────────────────
+  // ═══════════════════════════════════════════════════════════
+  // Load from Supabase + join campers
+  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     const client = getSupabaseClient();
-
-    // No client → user disconnected. Leave local data alone so they
-    // can keep working offline. Do not clear anything.
     if (!client) return;
 
     let cancelled = false;
@@ -135,15 +184,34 @@ export function App() {
         { data: eventRows, error: eventError },
         { data: registrationRows, error: registrationError }
       ] = await Promise.all([
-        client.from('events').select('*').order('created_at', { ascending: false }),
+        client
+          .from('events')
+          .select('*')
+          .order('created_at', { ascending: false }),
+
+        // Nested join on campers — returns each registration with its
+        // camper rows pre-attached.
         client
           .from('registrations')
-          .select('*')
+          .select(`
+            *,
+            campers (
+              id,
+              submission_id,
+              full_name,
+              badge_name,
+              age,
+              grade_level,
+              gender,
+              sort_order
+            )
+          `)
           .order('submitted_at', { ascending: false })
       ]);
 
       if (cancelled) return;
 
+      // ── Events ─────────────────────────────────────────────
       if (eventError) {
         console.warn('Supabase events load error:', eventError);
       } else if (eventRows) {
@@ -168,26 +236,15 @@ export function App() {
           isMultiPart: row.is_multi_part ?? undefined
         }));
 
-        // Merge strategy:
-        // - Supabase is authoritative for any ID it already knows.
-        // - Keep local-only events that have never been synced (they'll
-        //   get pushed on next save).
-        // - On the very first sync we still prefer Supabase's full set
-        //   so the dashboard reflects the server, but we never drop
-        //   a local event whose ID isn't present on the server.
         setEvents(prev => {
-          if (!hasSyncedRef.current) {
-            hasSyncedRef.current = true;
-            const serverIds = new Set(mappedEvents.map(e => e.id));
-            const localOnly = prev.filter(e => !serverIds.has(e.id));
-            return [...localOnly, ...mappedEvents];
-          }
           const serverIds = new Set(mappedEvents.map(e => e.id));
           const localOnly = prev.filter(e => !serverIds.has(e.id));
+          if (!hasSyncedRef.current) hasSyncedRef.current = true;
           return [...localOnly, ...mappedEvents];
         });
       }
 
+      // ── Registrations + campers ────────────────────────────
       if (registrationError) {
         console.warn('Supabase registrations load error:', registrationError);
       } else if (registrationRows) {
@@ -198,7 +255,16 @@ export function App() {
             submitted_at: row.submitted_at,
             status: row.status,
             data: row.data || {},
-            notes: row.notes || undefined
+            notes: row.notes || undefined,
+            campers: Array.isArray(row.campers)
+              ? row.campers
+                  .slice()
+                  .sort(
+                    (a: any, b: any) =>
+                      (a.sort_order ?? 0) - (b.sort_order ?? 0)
+                  )
+                  .map(mapCamperRow)
+              : []
           })
         );
 
@@ -295,8 +361,6 @@ export function App() {
         alert(
           `Event was saved locally, but Supabase could not save it.\n\n${error.message}`
         );
-      } else {
-        console.log('Event saved to Supabase:', eventToSave.id);
       }
     }
   };
@@ -326,7 +390,9 @@ export function App() {
     if (!ev) return;
 
     setEvents(prev =>
-      prev.map(e => (e.id === eventId ? { ...e, status: 'archived' as const } : e))
+      prev.map(e =>
+        e.id === eventId ? { ...e, status: 'archived' as const } : e
+      )
     );
 
     pushLog(
@@ -345,9 +411,6 @@ export function App() {
 
       if (error) {
         console.warn('Supabase archive error:', error);
-        alert(
-          `Event was archived locally, but Supabase could not update it.\n\n${error.message}`
-        );
       }
     }
   };
@@ -358,7 +421,9 @@ export function App() {
     if (!ev) return;
 
     setEvents(prev =>
-      prev.map(e => (e.id === eventId ? { ...e, status: 'active' as const } : e))
+      prev.map(e =>
+        e.id === eventId ? { ...e, status: 'active' as const } : e
+      )
     );
 
     pushLog(
@@ -375,21 +440,13 @@ export function App() {
         .update({ status: 'active' })
         .eq('id', eventId);
 
-      if (error) {
-        console.warn('Supabase restore error:', error);
-        alert(
-          `Event was restored locally, but Supabase could not update it.\n\n${error.message}`
-        );
-      }
+      if (error) console.warn('Supabase restore error:', error);
     }
   };
 
-  // ── Handler: Submit Public Registration ───────────────────
-  // NOTE: The public form (PublicRegistrationPage) currently writes to
-  // Supabase directly. This handler remains for any internal callers
-  // that want to funnel through App's state. It uses functional
-  // updates and reconciles the Supabase-generated UUID with the
-  // local placeholder ID.
+  // ═══════════════════════════════════════════════════════════
+  // Submit Public Registration (+ persist campers)
+  // ═══════════════════════════════════════════════════════════
   const handleSubmitRegistration = async (
     eventId: string,
     formData: Record<string, any>
@@ -399,12 +456,21 @@ export function App() {
       .toString(36)
       .slice(2, 8)}`;
 
+    // If the form provided a campers array inside formData, pull it out
+    // so it becomes a first-class submission field.
+    const formCampers: CamperItem[] | undefined = Array.isArray(
+      formData.campers
+    )
+      ? formData.campers
+      : undefined;
+
     const newSubmission: RegistrationSubmission = {
       id: localId,
       eventId,
       submitted_at: now,
       status: 'confirmed',
-      data: formData
+      data: formData,
+      campers: formCampers
     };
 
     setSubmissions(prev => [newSubmission, ...prev]);
@@ -445,34 +511,64 @@ export function App() {
       } else if (inserted) {
         // Replace the local placeholder ID with the real Supabase UUID.
         setSubmissions(prev =>
-          prev.map(s =>
-            s.id === localId ? { ...s, id: inserted.id } : s
-          )
+          prev.map(s => (s.id === localId ? { ...s, id: inserted.id } : s))
         );
+
+        // Persist campers to the campers table.
+        if (formCampers?.length) {
+          await persistCampers(client, inserted.id, eventId, formCampers);
+        }
       }
     }
   };
 
-  // ── Handler: Update Submission Data ───────────────────────
-  const handleUpdateSubmissionData = (
+  // ═══════════════════════════════════════════════════════════
+  // Update Submission Data
+  //   Handles data, notes, status, and campers.
+  // ═══════════════════════════════════════════════════════════
+  const handleUpdateSubmissionData = async (
     submissionId: string,
-    updatedData: Record<string, any>
+    updatedData: Record<string, any>,
+    updatedNotes?: string,
+    updatedStatus?: SubmissionStatus,
+    updatedCampers?: CamperItem[]
   ) => {
+    // 1. Local state
     setSubmissions(prev =>
-      prev.map(s =>
-        s.id === submissionId ? { ...s, data: updatedData } : s
-      )
+      prev.map(s => {
+        if (s.id !== submissionId) return s;
+        return {
+          ...s,
+          data: updatedData,
+          notes: updatedNotes ?? s.notes,
+          status: updatedStatus ?? s.status,
+          campers: updatedCampers ?? s.campers
+        };
+      })
     );
 
+    // 2. Supabase — registrations row
     const client = getSupabaseClient();
-    if (client) {
-      client
-        .from('registrations')
-        .update({ data: updatedData })
-        .eq('id', submissionId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase submission update error:', error);
-        });
+    if (!client) return;
+
+    const patch: Record<string, any> = { data: updatedData };
+    if (updatedNotes !== undefined) patch.notes = updatedNotes;
+    if (updatedStatus !== undefined) patch.status = updatedStatus;
+
+    const { error } = await client
+      .from('registrations')
+      .update(patch)
+      .eq('id', submissionId);
+
+    if (error) {
+      console.warn('Supabase submission update error:', error);
+    }
+
+    // 3. Supabase — campers rows (only when the caller passed them in)
+    if (updatedCampers !== undefined) {
+      const sub = submissions.find(s => s.id === submissionId);
+      const eventId = sub?.eventId || '';
+      await persistCampers(client, submissionId, eventId, updatedCampers);
     }
   };
 
@@ -508,6 +604,7 @@ export function App() {
 
     const client = getSupabaseClient();
     if (client) {
+      // campers rows are removed automatically via ON DELETE CASCADE
       client
         .from('registrations')
         .delete()
@@ -559,7 +656,6 @@ export function App() {
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#070d19] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
-      {/* Top Header Navbar */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -572,7 +668,6 @@ export function App() {
         eventsCount={events.filter(e => e.status !== 'archived').length}
       />
 
-      {/* Main Body View */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'events' && (
           <EventsView
@@ -632,7 +727,6 @@ export function App() {
         )}
       </main>
 
-      {/* No-Code Form Builder Modal */}
       {isFormBuilderOpen && (
         <FormBuilderModal
           initialEvent={editingEvent}
@@ -644,7 +738,6 @@ export function App() {
         />
       )}
 
-      {/* AI Assistant Drawer */}
       <AIAssistantDrawer
         isOpen={isAIAssistantOpen}
         onClose={() => setIsAIAssistantOpen(false)}
@@ -653,7 +746,6 @@ export function App() {
         onSelectAction={handleAIAction}
       />
 
-      {/* Footer */}
       <footer className="glass-panel border-t border-slate-800/80 py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -665,7 +757,7 @@ export function App() {
           <div className="flex items-center gap-4 text-slate-400">
             <span>Supabase DB Enabled</span>
             <span>Vercel Ready</span>
-            <span> Lyka Colinares</span>
+            <span>Lyka Colinares</span>
           </div>
         </div>
       </footer>
