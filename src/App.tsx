@@ -15,6 +15,7 @@ import { Navbar } from './components/Navbar';
 import { EventsView } from './components/EventsView';
 import { TemplatesView } from './components/TemplatesView';
 import { SubmissionsView } from './components/SubmissionsView';
+import { EventDataView } from './components/EventDataView';
 import { ArchiveView } from './components/ArchiveView';
 import { FormBuilderModal } from './components/FormBuilderModal';
 import { PublicRegistrationPage } from './components/PublicRegistrationPage';
@@ -134,6 +135,11 @@ export function App() {
     string | undefined
   >(undefined);
 
+  // ── Per-Event Data Page ─────────────────────────────────────
+  // When set, the main content area shows the dedicated per-event
+  // editor page instead of the tabbed views.
+  const [eventDataViewId, setEventDataViewId] = useState<string | null>(null);
+
   const hasSyncedRef = useRef(false);
 
   // ── Log helper ─────────────────────────────────────────────
@@ -189,8 +195,6 @@ export function App() {
           .select('*')
           .order('created_at', { ascending: false }),
 
-        // Nested join on campers — returns each registration with its
-        // camper rows pre-attached.
         client
           .from('registrations')
           .select(`
@@ -445,85 +449,7 @@ export function App() {
   };
 
   // ═══════════════════════════════════════════════════════════
-  // Submit Public Registration (+ persist campers)
-  // ═══════════════════════════════════════════════════════════
-  const handleSubmitRegistration = async (
-    eventId: string,
-    formData: Record<string, any>
-  ) => {
-    const now = new Date().toISOString();
-    const localId = `sub-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-
-    // If the form provided a campers array inside formData, pull it out
-    // so it becomes a first-class submission field.
-    const formCampers: CamperItem[] | undefined = Array.isArray(
-      formData.campers
-    )
-      ? formData.campers
-      : undefined;
-
-    const newSubmission: RegistrationSubmission = {
-      id: localId,
-      eventId,
-      submitted_at: now,
-      status: 'confirmed',
-      data: formData,
-      campers: formCampers
-    };
-
-    setSubmissions(prev => [newSubmission, ...prev]);
-    setEvents(prev =>
-      prev.map(e => (e.id === eventId ? { ...e, last_used_at: now } : e))
-    );
-
-    const ev = events.find(e => e.id === eventId);
-    const registrantName =
-      formData.f_church_name ||
-      formData.f_name ||
-      formData.f_fullname ||
-      formData.f_guest_name ||
-      'Attendee';
-
-    pushLog(
-      'New Registration Submitted',
-      `${registrantName} registered for ${ev?.title || 'Event'}`,
-      'success',
-      eventId
-    );
-
-    const client = getSupabaseClient();
-    if (client) {
-      const { data: inserted, error } = await client
-        .from('registrations')
-        .insert({
-          event_id: eventId,
-          submitted_at: now,
-          status: 'confirmed',
-          data: formData
-        })
-        .select('id')
-        .single();
-
-      if (error) {
-        console.warn('Supabase submission insert error:', error);
-      } else if (inserted) {
-        // Replace the local placeholder ID with the real Supabase UUID.
-        setSubmissions(prev =>
-          prev.map(s => (s.id === localId ? { ...s, id: inserted.id } : s))
-        );
-
-        // Persist campers to the campers table.
-        if (formCampers?.length) {
-          await persistCampers(client, inserted.id, eventId, formCampers);
-        }
-      }
-    }
-  };
-
-  // ═══════════════════════════════════════════════════════════
-  // Update Submission Data
+  // Update Submission Data (used by EventDataView)
   //   Handles data, notes, status, and campers.
   // ═══════════════════════════════════════════════════════════
   const handleUpdateSubmissionData = async (
@@ -595,24 +521,39 @@ export function App() {
   };
 
   // ── Handler: Delete Submission ────────────────────────────
-  const handleDeleteSubmission = (submissionId: string) => {
-    if (!confirm('Are you sure you want to delete this registration record?')) {
-      return;
+  const handleDeleteSubmission = async (submissionId: string) => {
+    const client = getSupabaseClient();
+
+    // 1. Explicit camper cleanup (belt-and-suspenders; FK CASCADE usually
+    //    handles this automatically).
+    if (client) {
+      const { error: camperErr } = await client
+        .from('campers')
+        .delete()
+        .eq('submission_id', submissionId);
+      if (camperErr) {
+        console.warn('Supabase campers delete error:', camperErr);
+      }
     }
 
-    setSubmissions(prev => prev.filter(s => s.id !== submissionId));
-
-    const client = getSupabaseClient();
+    // 2. Delete the registration row.
     if (client) {
-      // campers rows are removed automatically via ON DELETE CASCADE
-      client
+      const { error: regErr } = await client
         .from('registrations')
         .delete()
-        .eq('id', submissionId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase submission delete error:', error);
-        });
+        .eq('id', submissionId);
+
+      if (regErr) {
+        console.error('Supabase submission delete error:', regErr);
+        alert(
+          `Could not delete this registration from Supabase.\n\n${regErr.message}`
+        );
+        return;
+      }
     }
+
+    // 3. Only now remove from local state.
+    setSubmissions(prev => prev.filter(s => s.id !== submissionId));
   };
 
   // ── AI Assistant Quick Actions Router ─────────────────────
@@ -629,6 +570,7 @@ export function App() {
       setActiveTab('templates');
       setIsAIAssistantOpen(false);
     } else if (actionType === 'open_table') {
+      setEventDataViewId(null);
       setActiveTab('submissions');
       setIsAIAssistantOpen(false);
     } else if (actionType === 'open_archive') {
@@ -653,12 +595,21 @@ export function App() {
     );
   }
 
+  // ── Selected event for the per-event data page ────────────
+  const eventDataViewEvent = eventDataViewId
+    ? events.find(e => e.id === eventDataViewId) || null
+    : null;
+
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#070d19] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={tab => {
+          // Leaving the tabbed views always closes the per-event page.
+          setEventDataViewId(null);
+          setActiveTab(tab);
+        }}
         onOpenNewEvent={() => {
           setEditingEvent(undefined);
           setIsFormBuilderOpen(true);
@@ -669,61 +620,74 @@ export function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'events' && (
-          <EventsView
-            events={events}
-            submissions={submissions}
-            onOpenNewEvent={() => {
-              setEditingEvent(undefined);
-              setIsFormBuilderOpen(true);
-            }}
-            onEditEvent={event => {
-              setEditingEvent(event);
-              setIsFormBuilderOpen(true);
-            }}
-            onArchiveEvent={handleArchiveEvent}
-            onOpenPublicForm={event => {
-              window.location.hash = `/form/${event.id}`;
-            }}
-            onViewSubmissions={eventId => {
-              setSelectedSubmissionsEventId(eventId);
-              setActiveTab('submissions');
-            }}
-          />
-        )}
-
-        {activeTab === 'templates' && (
-          <TemplatesView onSelectTemplate={handleSelectTemplate} />
-        )}
-
-        {activeTab === 'submissions' && (
-          <SubmissionsView
-            events={events}
-            submissions={submissions}
-            selectedEventId={selectedSubmissionsEventId}
-            onUpdateSubmissionData={handleUpdateSubmissionData}
+        {/* ── Per-Event Data Page overrides the tab switch ─── */}
+        {eventDataViewEvent ? (
+          <EventDataView
+            event={eventDataViewEvent}
+            submissions={submissions.filter(
+              s => s.eventId === eventDataViewEvent.id
+            )}
+            onBack={() => setEventDataViewId(null)}
             onUpdateSubmissionStatus={handleUpdateSubmissionStatus}
+            onUpdateSubmissionData={handleUpdateSubmissionData}
             onDeleteSubmission={handleDeleteSubmission}
           />
-        )}
+        ) : (
+          <>
+            {activeTab === 'events' && (
+              <EventsView
+                events={events}
+                submissions={submissions}
+                onOpenNewEvent={() => {
+                  setEditingEvent(undefined);
+                  setIsFormBuilderOpen(true);
+                }}
+                onEditEvent={event => {
+                  setEditingEvent(event);
+                  setIsFormBuilderOpen(true);
+                }}
+                onArchiveEvent={handleArchiveEvent}
+                onOpenPublicForm={event => {
+                  window.location.hash = `/form/${event.id}`;
+                }}
+                onViewSubmissions={eventId => {
+                  // Opens the dedicated per-event data page.
+                  setEventDataViewId(eventId);
+                }}
+              />
+            )}
 
-        {activeTab === 'archive' && (
-          <ArchiveView
-            events={events}
-            submissions={submissions}
-            logs={logs}
-            onRestoreEvent={handleRestoreEvent}
-          />
-        )}
+            {activeTab === 'templates' && (
+              <TemplatesView onSelectTemplate={handleSelectTemplate} />
+            )}
 
-        {activeTab === 'supabase' && (
-          <div className="py-4">
-            <SupabaseModal
-              config={supabaseConfig}
-              onClose={() => setActiveTab('events')}
-              onUpdateConfig={newConfig => setSupabaseConfig(newConfig)}
-            />
-          </div>
+            {activeTab === 'submissions' && (
+              <SubmissionsView
+                events={events}
+                submissions={submissions}
+                selectedEventId={selectedSubmissionsEventId}
+              />
+            )}
+
+            {activeTab === 'archive' && (
+              <ArchiveView
+                events={events}
+                submissions={submissions}
+                logs={logs}
+                onRestoreEvent={handleRestoreEvent}
+              />
+            )}
+
+            {activeTab === 'supabase' && (
+              <div className="py-4">
+                <SupabaseModal
+                  config={supabaseConfig}
+                  onClose={() => setActiveTab('events')}
+                  onUpdateConfig={newConfig => setSupabaseConfig(newConfig)}
+                />
+              </div>
+            )}
+          </>
         )}
       </main>
 
