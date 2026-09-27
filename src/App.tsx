@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  RegistrationEvent, 
-  RegistrationSubmission, 
-  SystemLog, 
-  SupabaseConfig, 
-  FormTemplate, 
-  SubmissionStatus 
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  RegistrationEvent,
+  RegistrationSubmission,
+  SystemLog,
+  SupabaseConfig,
+  FormTemplate
 } from './types';
+import type { SubmissionStatus } from './types';
 import { getSavedSupabaseConfig, getSupabaseClient } from './lib/supabase';
 
 // Components
@@ -20,10 +20,38 @@ import { PublicRegistrationPage } from './components/PublicRegistrationPage';
 import { SupabaseModal } from './components/SupabaseModal';
 import { AIAssistantDrawer } from './components/AIAssistantDrawer';
 
+// ─────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const PUBLIC_FORM_HASH_RE = /^#\/form\/([a-zA-Z0-9-]+)$/;
+
+const safeRandomUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // RFC4122 v4 fallback
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+const makeLogId = (): string =>
+  `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+// ─────────────────────────────────────────────────────────────
+// App
+// ─────────────────────────────────────────────────────────────
 export function App() {
-  const [activeTab, setActiveTab] = useState<'events' | 'templates' | 'submissions' | 'archive' | 'supabase'>('events');
-  
-  // Persistent State
+  const [activeTab, setActiveTab] = useState<
+    'events' | 'templates' | 'submissions' | 'archive' | 'supabase'
+  >('events');
+
+  // ── Persistent State ────────────────────────────────────────
   const [events, setEvents] = useState<RegistrationEvent[]>(() => {
     const saved = localStorage.getItem('aurum_events');
     return saved ? JSON.parse(saved) : [];
@@ -39,17 +67,47 @@ export function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getSavedSupabaseConfig);
+  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(
+    getSavedSupabaseConfig
+  );
 
-  // Modals & Navigation States
+  // ── Modals & Navigation ─────────────────────────────────────
   const [isFormBuilderOpen, setIsFormBuilderOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<Partial<RegistrationEvent> | undefined>(undefined);
+  const [editingEvent, setEditingEvent] = useState<
+    Partial<RegistrationEvent> | undefined
+  >(undefined);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
-  const [publicFormEvent, setPublicFormEvent] = useState<RegistrationEvent | null>(null);
   const [publicEventId, setPublicEventId] = useState<string | null>(null);
-  const [selectedSubmissionsEventId, setSelectedSubmissionsEventId] = useState<string | undefined>(undefined);
+  const [selectedSubmissionsEventId, setSelectedSubmissionsEventId] = useState<
+    string | undefined
+  >(undefined);
 
-  // Keep a local cache, but use Supabase as the source of truth when connected.
+  // Track whether the user has already synced once, so we don't wipe
+  // local-only data on the initial connect.
+  const hasSyncedRef = useRef(false);
+
+  // ── Log helper ─────────────────────────────────────────────
+  const pushLog = useCallback(
+    (
+      action: string,
+      details: string,
+      type: SystemLog['type'],
+      eventId?: string
+    ) => {
+      const newLog: SystemLog = {
+        id: makeLogId(),
+        timestamp: new Date().toISOString(),
+        action,
+        details,
+        eventId,
+        type
+      };
+      setLogs(prev => [newLog, ...prev]);
+    },
+    []
+  );
+
+  // ── Persist local cache ────────────────────────────────────
   useEffect(() => {
     localStorage.setItem('aurum_events', JSON.stringify(events));
   }, [events]);
@@ -62,10 +120,15 @@ export function App() {
     localStorage.setItem('aurum_logs', JSON.stringify(logs));
   }, [logs]);
 
-  // Load live events and registrations from Supabase when connected.
+  // ── Load from Supabase when config changes ─────────────────
   useEffect(() => {
     const client = getSupabaseClient();
+
+    // No client → user disconnected. Leave local data alone so they
+    // can keep working offline. Do not clear anything.
     if (!client) return;
+
+    let cancelled = false;
 
     const loadFromSupabase = async () => {
       const [
@@ -73,12 +136,17 @@ export function App() {
         { data: registrationRows, error: registrationError }
       ] = await Promise.all([
         client.from('events').select('*').order('created_at', { ascending: false }),
-        client.from('registrations').select('*').order('submitted_at', { ascending: false })
+        client
+          .from('registrations')
+          .select('*')
+          .order('submitted_at', { ascending: false })
       ]);
+
+      if (cancelled) return;
 
       if (eventError) {
         console.warn('Supabase events load error:', eventError);
-      } else if (eventRows && eventRows.length > 0) {
+      } else if (eventRows) {
         const mappedEvents: RegistrationEvent[] = eventRows.map((row: any) => ({
           id: row.id,
           title: row.title,
@@ -100,38 +168,61 @@ export function App() {
           isMultiPart: row.is_multi_part ?? undefined
         }));
 
-        // Supabase is authoritative when connected.
-        setEvents(mappedEvents);
+        // Merge strategy:
+        // - Supabase is authoritative for any ID it already knows.
+        // - Keep local-only events that have never been synced (they'll
+        //   get pushed on next save).
+        // - On the very first sync we still prefer Supabase's full set
+        //   so the dashboard reflects the server, but we never drop
+        //   a local event whose ID isn't present on the server.
+        setEvents(prev => {
+          if (!hasSyncedRef.current) {
+            hasSyncedRef.current = true;
+            const serverIds = new Set(mappedEvents.map(e => e.id));
+            const localOnly = prev.filter(e => !serverIds.has(e.id));
+            return [...localOnly, ...mappedEvents];
+          }
+          const serverIds = new Set(mappedEvents.map(e => e.id));
+          const localOnly = prev.filter(e => !serverIds.has(e.id));
+          return [...localOnly, ...mappedEvents];
+        });
       }
 
       if (registrationError) {
         console.warn('Supabase registrations load error:', registrationError);
-      } else if (registrationRows && registrationRows.length > 0) {
-        const mappedSubmissions: RegistrationSubmission[] = registrationRows.map((row: any) => ({
-          id: row.id,
-          eventId: row.event_id,
-          submitted_at: row.submitted_at,
-          status: row.status,
-          data: row.data || {},
-          notes: row.notes || undefined
-        }));
+      } else if (registrationRows) {
+        const mappedSubmissions: RegistrationSubmission[] = registrationRows.map(
+          (row: any) => ({
+            id: row.id,
+            eventId: row.event_id,
+            submitted_at: row.submitted_at,
+            status: row.status,
+            data: row.data || {},
+            notes: row.notes || undefined
+          })
+        );
 
-        setSubmissions(mappedSubmissions);
+        setSubmissions(prev => {
+          const serverIds = new Set(mappedSubmissions.map(s => s.id));
+          const localOnly = prev.filter(s => !serverIds.has(s.id));
+          return [...localOnly, ...mappedSubmissions];
+        });
       }
     };
 
     loadFromSupabase();
-  }, [supabaseConfig]);
 
-  // Handle public registration hash routes
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseConfig?.url, supabaseConfig?.anonKey]);
+
+  // ── Hash routing for public form ──────────────────────────
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#/form/')) {
-        setPublicEventId(hash.replace('#/form/', ''));
-      } else {
-        setPublicEventId(null);
-      }
+      const hash = window.location.hash || '';
+      const match = hash.match(PUBLIC_FORM_HASH_RE);
+      setPublicEventId(match ? match[1] : null);
     };
 
     handleHashChange();
@@ -139,19 +230,18 @@ export function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Handler: Add or Update Event
+  // ── Handler: Add or Update Event ──────────────────────────
   const handleSaveEvent = async (savedEvent: RegistrationEvent) => {
     const client = getSupabaseClient();
     const existingEvent = events.find(e => e.id === savedEvent.id);
     const existingIndex = events.findIndex(e => e.id === savedEvent.id);
     const now = new Date().toISOString();
 
-    // New Supabase rows use a real UUID. Existing events keep their current UUID.
     const eventId =
       existingEvent?.id ||
-      (savedEvent.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(savedEvent.id)
+      (savedEvent.id && UUID_RE.test(savedEvent.id)
         ? savedEvent.id
-        : crypto.randomUUID());
+        : safeRandomUUID());
 
     const eventToSave: RegistrationEvent = {
       ...savedEvent,
@@ -160,60 +250,58 @@ export function App() {
       last_used_at: savedEvent.last_used_at || now
     };
 
-    const updatedEvents =
+    setEvents(prev =>
       existingIndex >= 0
-        ? events.map(e => e.id === savedEvent.id ? eventToSave : e)
-        : [eventToSave, ...events];
+        ? prev.map(e => (e.id === savedEvent.id ? eventToSave : e))
+        : [eventToSave, ...prev]
+    );
 
-    setEvents(updatedEvents);
     setIsFormBuilderOpen(false);
     setEditingEvent(undefined);
 
-    const actionText =
+    pushLog(
+      existingIndex >= 0 ? 'Event Updated' : 'Event Created',
       existingIndex >= 0
         ? `Updated registration site "${eventToSave.title}"`
-        : `Created new registration site "${eventToSave.title}"`;
-
-    const newLog: SystemLog = {
-      id: `log-${Date.now()}`,
-      timestamp: now,
-      action: existingIndex >= 0 ? 'Event Updated' : 'Event Created',
-      details: actionText,
-      eventId: eventToSave.id,
-      type: 'info'
-    };
-
-    setLogs(prev => [newLog, ...prev]);
+        : `Created new registration site "${eventToSave.title}"`,
+      'info',
+      eventToSave.id
+    );
 
     if (client) {
-      const { error } = await client.from('events').upsert({
-        id: eventToSave.id,
-        title: eventToSave.title,
-        slug: eventToSave.slug,
-        type: eventToSave.type,
-        category: eventToSave.category,
-        description: eventToSave.description,
-        location: eventToSave.location || null,
-        event_date: eventToSave.eventDate || null,
-        status: eventToSave.status,
-        fields: eventToSave.fields || [],
-        max_registrations: eventToSave.maxRegistrations ?? null,
-        submit_button_text: eventToSave.submitButtonText || null,
-        success_message: eventToSave.successMessage || null,
-        created_at: eventToSave.created_at,
-        last_used_at: eventToSave.last_used_at
-      }, { onConflict: 'id' });
+      const { error } = await client.from('events').upsert(
+        {
+          id: eventToSave.id,
+          title: eventToSave.title,
+          slug: eventToSave.slug,
+          type: eventToSave.type,
+          category: eventToSave.category,
+          description: eventToSave.description,
+          location: eventToSave.location || null,
+          event_date: eventToSave.eventDate || null,
+          status: eventToSave.status,
+          fields: eventToSave.fields || [],
+          max_registrations: eventToSave.maxRegistrations ?? null,
+          submit_button_text: eventToSave.submitButtonText || null,
+          success_message: eventToSave.successMessage || null,
+          created_at: eventToSave.created_at,
+          last_used_at: eventToSave.last_used_at
+        },
+        { onConflict: 'id' }
+      );
 
       if (error) {
         console.error('Supabase event save error:', error);
-        alert(`Event was saved locally, but Supabase could not save it.\n\n${error.message}`);
+        alert(
+          `Event was saved locally, but Supabase could not save it.\n\n${error.message}`
+        );
       } else {
         console.log('Event saved to Supabase:', eventToSave.id);
       }
     }
   };
 
-  // Handler: Select Template to Create Event
+  // ── Handler: Select Template ──────────────────────────────
   const handleSelectTemplate = (template: FormTemplate) => {
     const draft: Partial<RegistrationEvent> = {
       title: template.defaultTitle,
@@ -221,124 +309,165 @@ export function App() {
       category: template.category,
       description: template.defaultDescription,
       fields: template.fields,
-      submitButtonText: template.defaultType === 'pre-registration' ? 'Submit Pre-Registration' : 'Confirm Registration',
-      successMessage: 'Thank you! Your registration details have been received.'
+      submitButtonText:
+        template.defaultType === 'pre-registration'
+          ? 'Submit Pre-Registration'
+          : 'Confirm Registration',
+      successMessage:
+        'Thank you! Your registration details have been received.'
     };
     setEditingEvent(draft);
     setIsFormBuilderOpen(true);
   };
 
-  // Handler: Archive Event
-  const handleArchiveEvent = (eventId: string) => {
+  // ── Handler: Archive Event ────────────────────────────────
+  const handleArchiveEvent = async (eventId: string) => {
     const ev = events.find(e => e.id === eventId);
     if (!ev) return;
 
-    const updated = events.map(e => e.id === eventId ? { ...e, status: 'archived' as const } : e);
-    setEvents(updated);
+    setEvents(prev =>
+      prev.map(e => (e.id === eventId ? { ...e, status: 'archived' as const } : e))
+    );
+
+    pushLog(
+      'Event Archived',
+      `Archived site "${ev.title}" to History Vault`,
+      'warning',
+      eventId
+    );
 
     const client = getSupabaseClient();
     if (client) {
-      client.from('events')
+      const { error } = await client
+        .from('events')
         .update({ status: 'archived' })
-        .eq('id', eventId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase archive error:', error);
-        });
-    }
+        .eq('id', eventId);
 
-    const newLog: SystemLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      action: 'Event Archived',
-      details: `Archived site "${ev.title}" to History Vault`,
-      eventId,
-      type: 'warning'
-    };
-    setLogs([newLog, ...logs]);
+      if (error) {
+        console.warn('Supabase archive error:', error);
+        alert(
+          `Event was archived locally, but Supabase could not update it.\n\n${error.message}`
+        );
+      }
+    }
   };
 
-  // Handler: Restore Event
-  const handleRestoreEvent = (eventId: string) => {
+  // ── Handler: Restore Event ────────────────────────────────
+  const handleRestoreEvent = async (eventId: string) => {
     const ev = events.find(e => e.id === eventId);
     if (!ev) return;
 
-    const updated = events.map(e => e.id === eventId ? { ...e, status: 'active' as const } : e);
-    setEvents(updated);
+    setEvents(prev =>
+      prev.map(e => (e.id === eventId ? { ...e, status: 'active' as const } : e))
+    );
+
+    pushLog(
+      'Event Restored',
+      `Restored site "${ev.title}" back to active dashboard`,
+      'success',
+      eventId
+    );
 
     const client = getSupabaseClient();
     if (client) {
-      client.from('events')
+      const { error } = await client
+        .from('events')
         .update({ status: 'active' })
-        .eq('id', eventId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase restore error:', error);
-        });
-    }
+        .eq('id', eventId);
 
-    const newLog: SystemLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      action: 'Event Restored',
-      details: `Restored site "${ev.title}" back to active dashboard`,
-      eventId,
-      type: 'success'
-    };
-    setLogs([newLog, ...logs]);
+      if (error) {
+        console.warn('Supabase restore error:', error);
+        alert(
+          `Event was restored locally, but Supabase could not update it.\n\n${error.message}`
+        );
+      }
+    }
   };
 
-  // Handler: Submit Public Registration
-  const handleSubmitRegistration = (eventId: string, formData: Record<string, any>) => {
+  // ── Handler: Submit Public Registration ───────────────────
+  // NOTE: The public form (PublicRegistrationPage) currently writes to
+  // Supabase directly. This handler remains for any internal callers
+  // that want to funnel through App's state. It uses functional
+  // updates and reconciles the Supabase-generated UUID with the
+  // local placeholder ID.
+  const handleSubmitRegistration = async (
+    eventId: string,
+    formData: Record<string, any>
+  ) => {
     const now = new Date().toISOString();
+    const localId = `sub-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+
     const newSubmission: RegistrationSubmission = {
-      id: `sub-${Date.now()}`,
+      id: localId,
       eventId,
       submitted_at: now,
       status: 'confirmed',
       data: formData
     };
 
-    setSubmissions([newSubmission, ...submissions]);
-
-    // Update Event last_used_at timestamp
-    setEvents(events.map(e => e.id === eventId ? { ...e, last_used_at: now } : e));
+    setSubmissions(prev => [newSubmission, ...prev]);
+    setEvents(prev =>
+      prev.map(e => (e.id === eventId ? { ...e, last_used_at: now } : e))
+    );
 
     const ev = events.find(e => e.id === eventId);
-    const registrantName = formData.f_name || formData.f_fullname || formData.f_guest_name || 'Attendee';
+    const registrantName =
+      formData.f_church_name ||
+      formData.f_name ||
+      formData.f_fullname ||
+      formData.f_guest_name ||
+      'Attendee';
 
-    const newLog: SystemLog = {
-      id: `log-${Date.now()}`,
-      timestamp: now,
-      action: 'New Registration Submitted',
-      details: `${registrantName} registered for ${ev?.title || 'Event'}`,
-      eventId,
-      type: 'success'
-    };
-    setLogs([newLog, ...logs]);
+    pushLog(
+      'New Registration Submitted',
+      `${registrantName} registered for ${ev?.title || 'Event'}`,
+      'success',
+      eventId
+    );
 
-    // Push to Supabase if connected
     const client = getSupabaseClient();
     if (client) {
-      client.from('registrations').insert({
-        event_id: eventId,
-        submitted_at: now,
-        status: 'confirmed',
-        data: formData
-      }).then(({ error }) => {
-        if (error) console.warn('Supabase submission insert error:', error);
-      });
+      const { data: inserted, error } = await client
+        .from('registrations')
+        .insert({
+          event_id: eventId,
+          submitted_at: now,
+          status: 'confirmed',
+          data: formData
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.warn('Supabase submission insert error:', error);
+      } else if (inserted) {
+        // Replace the local placeholder ID with the real Supabase UUID.
+        setSubmissions(prev =>
+          prev.map(s =>
+            s.id === localId ? { ...s, id: inserted.id } : s
+          )
+        );
+      }
     }
   };
 
-  // Handler: Update Submission Data
-  const handleUpdateSubmissionData = (submissionId: string, updatedData: Record<string, any>) => {
-    setSubmissions(submissions.map(s =>
-      s.id === submissionId ? { ...s, data: updatedData } : s
-    ));
+  // ── Handler: Update Submission Data ───────────────────────
+  const handleUpdateSubmissionData = (
+    submissionId: string,
+    updatedData: Record<string, any>
+  ) => {
+    setSubmissions(prev =>
+      prev.map(s =>
+        s.id === submissionId ? { ...s, data: updatedData } : s
+      )
+    );
 
-    // Push the updated submission data to Supabase if connected
     const client = getSupabaseClient();
     if (client) {
-      client.from('registrations')
+      client
+        .from('registrations')
         .update({ data: updatedData })
         .eq('id', submissionId)
         .then(({ error }) => {
@@ -347,41 +476,55 @@ export function App() {
     }
   };
 
-  // Handler: Update Submission Status (e.g. Check-in)
-  const handleUpdateSubmissionStatus = (submissionId: string, newStatus: SubmissionStatus) => {
-    setSubmissions(submissions.map(s => s.id === submissionId ? { ...s, status: newStatus } : s));
+  // ── Handler: Update Submission Status ─────────────────────
+  const handleUpdateSubmissionStatus = (
+    submissionId: string,
+    newStatus: SubmissionStatus
+  ) => {
+    setSubmissions(prev =>
+      prev.map(s => (s.id === submissionId ? { ...s, status: newStatus } : s))
+    );
 
     const client = getSupabaseClient();
     if (client) {
-      client.from('registrations')
+      client
+        .from('registrations')
         .update({ status: newStatus })
         .eq('id', submissionId)
         .then(({ error }) => {
-          if (error) console.warn('Supabase submission status update error:', error);
+          if (error)
+            console.warn('Supabase submission status update error:', error);
         });
     }
   };
 
-  // Handler: Delete Submission
+  // ── Handler: Delete Submission ────────────────────────────
   const handleDeleteSubmission = (submissionId: string) => {
-    if (confirm('Are you sure you want to delete this registration record?')) {
-      setSubmissions(submissions.filter(s => s.id !== submissionId));
+    if (!confirm('Are you sure you want to delete this registration record?')) {
+      return;
+    }
 
-      const client = getSupabaseClient();
-      if (client) {
-        client.from('registrations')
-          .delete()
-          .eq('id', submissionId)
-          .then(({ error }) => {
-            if (error) console.warn('Supabase submission delete error:', error);
-          });
-      }
+    setSubmissions(prev => prev.filter(s => s.id !== submissionId));
+
+    const client = getSupabaseClient();
+    if (client) {
+      client
+        .from('registrations')
+        .delete()
+        .eq('id', submissionId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase submission delete error:', error);
+        });
     }
   };
 
-  // AI Assistant Quick Actions Router
+  // ── AI Assistant Quick Actions Router ─────────────────────
   const handleAIAction = (actionType: string, payload?: any) => {
-    if (actionType === 'create_event' && payload) {
+    if (
+      actionType === 'create_event' &&
+      payload &&
+      typeof payload === 'object'
+    ) {
       setEditingEvent(payload);
       setIsFormBuilderOpen(true);
       setIsAIAssistantOpen(false);
@@ -400,7 +543,7 @@ export function App() {
     }
   };
 
-  // Render Public Registration Page for hash route
+  // ── Public route short-circuit ────────────────────────────
   if (publicEventId) {
     return (
       <PublicRegistrationPage
@@ -413,9 +556,9 @@ export function App() {
     );
   }
 
+  // ── Render ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#070d19] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
-      
       {/* Top Header Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -439,15 +582,15 @@ export function App() {
               setEditingEvent(undefined);
               setIsFormBuilderOpen(true);
             }}
-            onEditEvent={(event) => {
+            onEditEvent={event => {
               setEditingEvent(event);
               setIsFormBuilderOpen(true);
             }}
             onArchiveEvent={handleArchiveEvent}
-            onOpenPublicForm={(event) => {
+            onOpenPublicForm={event => {
               window.location.hash = `/form/${event.id}`;
             }}
-            onViewSubmissions={(eventId) => {
+            onViewSubmissions={eventId => {
               setSelectedSubmissionsEventId(eventId);
               setActiveTab('submissions');
             }}
@@ -483,7 +626,7 @@ export function App() {
             <SupabaseModal
               config={supabaseConfig}
               onClose={() => setActiveTab('events')}
-              onUpdateConfig={(newConfig) => setSupabaseConfig(newConfig)}
+              onUpdateConfig={newConfig => setSupabaseConfig(newConfig)}
             />
           </div>
         )}
@@ -514,18 +657,20 @@ export function App() {
       <footer className="glass-panel border-t border-slate-800/80 py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-amber-300">AURUM REGISTRY</span>
+            <span className="font-serif font-bold text-amber-300">
+              AURUM REGISTRY
+            </span>
             <span>• No-Code Event & Pre-Registration Platform</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400">
             <span>Supabase DB Enabled</span>
             <span>Vercel Ready</span>
-            <span>Lucide Icons & Tailwind CSS</span>
+            <span> Lyka Colinares</span>
           </div>
         </div>
       </footer>
-
     </div>
   );
 }
+
 export default App;
