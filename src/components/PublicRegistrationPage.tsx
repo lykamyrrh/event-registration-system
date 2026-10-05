@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RegistrationEvent, CamperItem } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
+import { RegistrationReceiptCard } from './RegistrationReceiptCard';
 import {
   Calendar,
   MapPin,
@@ -88,6 +89,18 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   const [submittedJsonPayload, setSubmittedJsonPayload] = useState<string>('');
   const [copiedJson, setCopiedJson] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+
+  // ── Session-level delegation receipts ────────────────────────────────────
+  // Tracks each submitted delegation in this browser session so we can show
+  // the receipt/QR card on the "Add Delegation" page.
+  const [sessionDelegations, setSessionDelegations] = useState<
+    Array<{
+      submissionReference: string;
+      submittedAt: string;
+      campers: CamperItem[];
+      delegationNumber: number;
+    }>
+  >([]);
 
   useEffect(() => {
     const loadEventAndRegistration = async () => {
@@ -482,6 +495,17 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       }
     }
 
+    // Push to session delegations so the receipt card is shown on the Add Delegation page
+    setSessionDelegations(prev => [
+      ...prev,
+      {
+        submissionReference: subId,
+        submittedAt: new Date().toISOString(),
+        campers: [...campers],
+        delegationNumber: prev.length + 1
+      }
+    ]);
+
     setIsSubmitted(true);
   };
 
@@ -597,6 +621,42 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 </div>
               )}
             </div>
+
+            {/* ── Receipt cards for delegations submitted in this session ── */}
+            {sessionDelegations.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-px bg-slate-800" />
+                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                    Your Registered Delegations
+                  </p>
+                  <div className="flex-1 h-px bg-slate-800" />
+                </div>
+                <p className="text-xs text-slate-400 text-center -mt-2">
+                  The following campers are already in the YOUTH CAMP 2026 list.
+                  Screenshot or print your receipt as proof.
+                </p>
+                {sessionDelegations.map(d => (
+                  <RegistrationReceiptCard
+                    key={d.submissionReference}
+                    eventTitle={event?.title || 'AYOS Youth Camp 2026'}
+                    churchName={existingChurchFormData?.f_church_name || ''}
+                    pastorName={existingChurchFormData?.f_pastor_fullname}
+                    delegationHead={existingChurchFormData?.f_delegation_fullname}
+                    delegationContact={existingChurchFormData?.f_delegation_mobile}
+                    churchRegistrationCode={churchRegistrationCode}
+                    submissionReference={d.submissionReference}
+                    submittedAt={d.submittedAt}
+                    campers={d.campers}
+                    totalDelegationCampers={sessionDelegations.reduce(
+                      (acc, x) => acc + x.campers.length,
+                      0
+                    )}
+                    delegationNumber={d.delegationNumber}
+                  />
+                ))}
+              </div>
+            )}
 
             <button
               type="button"
@@ -1186,7 +1246,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             </h2>
 
             <p className="text-amber-300 text-sm max-w-md mx-auto leading-relaxed">
-              Praise God! Your AYOS YOUTH CAMP 2026 pre-registration has been submitted. Thank you and
+              Praise God! Your AYOS YOUTH CAMP 2026 pre-registration has been confirmed and is now officially recorded in our system. A confirmation email has been sent to the delegation head's email address. Please check your inbox (and spam folder) for the confirmation email.
             </p>
 
             <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 max-w-xl mx-auto text-left space-y-4">
@@ -1281,6 +1341,28 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                   {campers.length} Campers
                 </span>
               </div>
+            </div>
+
+            {/* ── Registration Receipt with QR Code ──────────────────── */}
+            <div className="pt-2">
+              <RegistrationReceiptCard
+                eventTitle={event?.title || 'AYOS Youth Camp 2026'}
+                churchName={existingChurchFormData?.f_church_name || formData.f_church_name || ''}
+                pastorName={
+                  existingChurchFormData?.f_pastor_fullname || formData.f_pastor_fullname
+                }
+                delegationHead={
+                  existingChurchFormData?.f_delegation_fullname || formData.f_delegation_fullname
+                }
+                delegationContact={
+                  existingChurchFormData?.f_delegation_mobile || formData.f_delegation_mobile
+                }
+                churchRegistrationCode={churchRegistrationCode}
+                submissionReference={submissionId}
+                submittedAt={new Date().toISOString()}
+                campers={campers}
+                delegationNumber={sessionDelegations.length}
+              />
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
