@@ -1,17 +1,61 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  SupabaseClient
+} from '@supabase/supabase-js';
+
 import { SupabaseConfig } from '../types';
 
 const STORAGE_KEY_URL = 'aurum_supabase_url';
 const STORAGE_KEY_KEY = 'aurum_supabase_anon_key';
 
+// ============================================================
+// SINGLE SUPABASE CLIENT INSTANCE
+// ============================================================
+//
+// IMPORTANT:
+// Do not create a new Supabase client every time
+// getSupabaseClient() is called.
+//
+// Creating multiple clients in the same browser context can
+// create multiple GoTrueClient instances that use the same
+// authentication storage key.
+//
+// Instead, keep one client instance and reuse it.
+// ============================================================
+
+let supabaseClient: SupabaseClient | null = null;
+
+// Keep track of which configuration created the current client.
+// This allows us to safely recreate the client only when the
+// Supabase URL or anon key actually changes.
+let activeSupabaseUrl = '';
+let activeSupabaseAnonKey = '';
+
+
+// ============================================================
+// GET SAVED SUPABASE CONFIGURATION
+// ============================================================
+
 export function getSavedSupabaseConfig(): SupabaseConfig {
-  const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  const envUrl =
+    import.meta.env.VITE_SUPABASE_URL || '';
 
-  const savedUrl = localStorage.getItem(STORAGE_KEY_URL) || envUrl;
-  const savedKey = localStorage.getItem(STORAGE_KEY_KEY) || envKey;
+  const envKey =
+    import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-  const isConnected = Boolean(savedUrl && savedKey && savedUrl.includes('supabase.co'));
+  const savedUrl =
+    localStorage.getItem(STORAGE_KEY_URL) ||
+    envUrl;
+
+  const savedKey =
+    localStorage.getItem(STORAGE_KEY_KEY) ||
+    envKey;
+
+  const isConnected = Boolean(
+    savedUrl &&
+    savedKey &&
+    savedUrl.includes('supabase.co')
+  );
 
   return {
     url: savedUrl,
@@ -20,24 +64,108 @@ export function getSavedSupabaseConfig(): SupabaseConfig {
   };
 }
 
-export function saveSupabaseConfig(url: string, anonKey: string): SupabaseConfig {
-  localStorage.setItem(STORAGE_KEY_URL, url);
-  localStorage.setItem(STORAGE_KEY_KEY, anonKey);
-  
+
+// ============================================================
+// SAVE SUPABASE CONFIGURATION
+// ============================================================
+
+export function saveSupabaseConfig(
+  url: string,
+  anonKey: string
+): SupabaseConfig {
+  const cleanUrl = url.trim();
+  const cleanAnonKey = anonKey.trim();
+
+  localStorage.setItem(
+    STORAGE_KEY_URL,
+    cleanUrl
+  );
+
+  localStorage.setItem(
+    STORAGE_KEY_KEY,
+    cleanAnonKey
+  );
+
+  // ----------------------------------------------------------
+  // Reset the cached client ONLY when the credentials changed.
+  //
+  // The next call to getSupabaseClient() will create exactly
+  // one new client using the new configuration.
+  // ----------------------------------------------------------
+
+  if (
+    cleanUrl !== activeSupabaseUrl ||
+    cleanAnonKey !== activeSupabaseAnonKey
+  ) {
+    supabaseClient = null;
+    activeSupabaseUrl = '';
+    activeSupabaseAnonKey = '';
+  }
+
   return getSavedSupabaseConfig();
 }
 
-export function getSupabaseClient(): SupabaseClient | null {
+
+// ============================================================
+// GET SUPABASE CLIENT
+// ============================================================
+
+export function getSupabaseClient():
+  SupabaseClient | null {
+
   const config = getSavedSupabaseConfig();
-  if (!config.isConnected) return null;
-  
+
+  if (!config.isConnected) {
+    return null;
+  }
+
+  // ----------------------------------------------------------
+  // Reuse the existing client when it was created using the
+  // same Supabase configuration.
+  // ----------------------------------------------------------
+
+  if (
+    supabaseClient &&
+    activeSupabaseUrl === config.url &&
+    activeSupabaseAnonKey === config.anonKey
+  ) {
+    return supabaseClient;
+  }
+
   try {
-    return createClient(config.url, config.anonKey);
+    // --------------------------------------------------------
+    // Create the client only once for this configuration.
+    // --------------------------------------------------------
+
+    supabaseClient = createClient(
+      config.url,
+      config.anonKey
+    );
+
+    activeSupabaseUrl = config.url;
+    activeSupabaseAnonKey = config.anonKey;
+
+    return supabaseClient;
+
   } catch (err) {
-    console.warn('Failed to initialize Supabase client:', err);
+    console.warn(
+      'Failed to initialize Supabase client:',
+      err
+    );
+
+    // Make sure a failed initialization is never cached.
+    supabaseClient = null;
+    activeSupabaseUrl = '';
+    activeSupabaseAnonKey = '';
+
     return null;
   }
 }
+
+
+// ============================================================
+// SUPABASE SQL SCHEMA
+// ============================================================
 
 export const SUPABASE_SQL_SCHEMA = `-- ========================================================
 -- AURUM REGISTRY - SUPABASE DATABASE SCHEMA SQL
