@@ -284,12 +284,17 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         return;
       }
 
+      // ── Step 1: Try to find the original 'church' registration ──────────
+      // We intentionally do NOT filter by registration_type here because:
+      //  a) Older records may lack that field entirely
+      //  b) The church code itself is already unique per church per event
+      // We order by submitted_at ASC and take the first match so we always
+      // get the original church record (not a later delegation add-on).
       const { data, error } = await client
         .from('registrations')
         .select('id,data')
         .eq('event_id', eventId)
         .eq('data->>church_registration_code', normalizedCode)
-        .eq('data->>registration_type', 'church')
         .order('submitted_at', { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -327,6 +332,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       setIsVerifyingCode(false);
     }
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

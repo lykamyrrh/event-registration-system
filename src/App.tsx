@@ -21,6 +21,7 @@ import { FormBuilderModal } from './components/FormBuilderModal';
 import { PublicRegistrationPage } from './components/PublicRegistrationPage';
 import { SupabaseModal } from './components/SupabaseModal';
 import { AIAssistantDrawer } from './components/AIAssistantDrawer';
+import { CamperListPage } from './components/CamperListPage';
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -29,6 +30,8 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const PUBLIC_FORM_HASH_RE = /^#\/form\/([a-zA-Z0-9-]+)$/;
+const CAMPER_LIST_HASH_RE = /^#\/campers\/([a-zA-Z0-9-]+)\/([A-Z0-9-]+)$/;
+
 
 const safeRandomUUID = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -134,6 +137,11 @@ export function App() {
   const [selectedSubmissionsEventId, setSelectedSubmissionsEventId] = useState<
     string | undefined
   >(undefined);
+  // Camper list route: { eventId, churchCode } when #/campers/... is active
+  const [camperListRoute, setCamperListRoute] = useState<{
+    eventId: string;
+    churchCode: string;
+  } | null>(null);
 
   // ── Per-Event Data Page ─────────────────────────────────────
   // When set, the main content area shows the dedicated per-event
