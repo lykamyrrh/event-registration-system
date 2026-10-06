@@ -1,6 +1,5 @@
 import React from 'react';
 import { 
-  Layers, 
   Calendar, 
   LayoutTemplate, 
   Database, 
@@ -9,11 +8,15 @@ import {
   Plus, 
   CheckCircle2 
 } from 'lucide-react';
+
 import { SupabaseConfig } from '../types';
+import ayosLogo from '../assets/AYOS LOGO.png';
 
 interface NavbarProps {
   activeTab: 'events' | 'templates' | 'submissions' | 'archive' | 'supabase';
-  setActiveTab: (tab: 'events' | 'templates' | 'submissions' | 'archive' | 'supabase') => void;
+  setActiveTab: (
+    tab: 'events' | 'templates' | 'submissions' | 'archive' | 'supabase'
+  ) => void;
   onOpenNewEvent: () => void;
   onToggleAIAssistant: () => void;
   supabaseConfig: SupabaseConfig;
@@ -32,23 +35,34 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-50 border-b border-navy-600/20 bg-white/95 backdrop-blur-md shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          
+
           {/* Brand / Logo */}
-          <div 
+          <div
             className="flex items-center gap-3 cursor-pointer group"
             onClick={() => setActiveTab('events')}
           >
-            <div className="h-10 w-10 rounded-xl bg-navy-900 text-white flex items-center justify-center font-black text-xl shadow-md shadow-navy-900/20 group-hover:scale-105 transition-transform">
-              <Layers className="w-5 h-5 stroke-[2.5] text-gold-400" />
+            <div className="h-12 w-12 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <img
+                src={ayosLogo}
+                alt="AYOS Youth Camp"
+                className="h-full w-full object-contain"
+              />
             </div>
+
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-display font-semibold text-lg tracking-wide text-navy-900">AURUM</span>
+                <span className="font-display font-semibold text-lg tracking-wide text-navy-900">
+                  MYRRH
+                </span>
+
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gold-100 text-gold-700 border border-gold-300">
                   REGISTRY
                 </span>
               </div>
-              <p className="text-xs text-navy-600">No-Code Event System</p>
+
+              <p className="text-xs text-navy-600">
+                Event Registration System
+              </p>
             </div>
           </div>
 
@@ -87,7 +101,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Database className="w-3.5 h-3.5" />
-              <span>Submissions & Data</span>
+              <span>Submissions</span>
             </button>
 
             <button
@@ -107,16 +121,34 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveTab('supabase')}
-              title={supabaseConfig.isConnected ? 'Connected to Supabase' : 'Running in Local Mode (Click to connect Supabase)'}
+              title={
+                supabaseConfig.isConnected
+                  ? 'Connected to Supabase'
+                  : 'Running in Local Mode (Click to connect Supabase)'
+              }
               className={`hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
                 supabaseConfig.isConnected
                   ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                   : 'bg-navy-100/30 border-navy-600/30 text-navy-900 hover:bg-navy-100/60'
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${supabaseConfig.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-navy-600'}`} />
-              <span>{supabaseConfig.isConnected ? 'Supabase Connected' : 'Supabase Ready'}</span>
-              {supabaseConfig.isConnected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  supabaseConfig.isConnected
+                    ? 'bg-emerald-500 animate-pulse'
+                    : 'bg-navy-600'
+                }`}
+              />
+
+              <span>
+                {supabaseConfig.isConnected
+                  ? 'Supabase Connected'
+                  : 'Supabase Ready'}
+              </span>
+
+              {supabaseConfig.isConnected && (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              )}
             </button>
 
             <button
