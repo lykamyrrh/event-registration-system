@@ -30,7 +30,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const PUBLIC_FORM_HASH_RE = /^#\/form\/([a-zA-Z0-9-]+)$/;
-const CAMPER_LIST_HASH_RE = /^#\/campers\/([a-zA-Z0-9-]+)\/([A-Z0-9-]+)$/;
+const CAMPER_LIST_HASH_RE = /^#\/campers\/([a-zA-Z0-9-]+)$/;
 
 
 const safeRandomUUID = (): string => {
@@ -108,15 +108,11 @@ export function App() {
   >('events');
 
   // ── Persistent State ────────────────────────────────────────
-  const [events, setEvents] = useState<RegistrationEvent[]>(() => {
-    const saved = localStorage.getItem('aurum_events');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [submissions, setSubmissions] = useState<RegistrationSubmission[]>(() => {
-    const saved = localStorage.getItem('aurum_submissions');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Supabase is the source of truth for events and submissions.
+  // Do not restore either collection from localStorage because a browser-only
+  // event can produce a public URL whose event_id does not exist in Supabase.
+  const [events, setEvents] = useState<RegistrationEvent[]>([]);
+  const [submissions, setSubmissions] = useState<RegistrationSubmission[]>([]);
 
   const [logs, setLogs] = useState<SystemLog[]>(() => {
     const saved = localStorage.getItem('aurum_logs');
@@ -137,11 +133,9 @@ export function App() {
   const [selectedSubmissionsEventId, setSelectedSubmissionsEventId] = useState<
     string | undefined
   >(undefined);
-  // Camper list route: { eventId, churchCode } when #/campers/... is active
-  const [camperListRoute, setCamperListRoute] = useState<{
-    eventId: string;
-    churchCode: string;
-  } | null>(null);
+  // Camper list route. The church code is intentionally NOT stored in the URL.
+  // The visitor must enter it again on CamperListPage.
+  const [camperListEventId, setCamperListEventId] = useState<string | null>(null);
 
   // ── Per-Event Data Page ─────────────────────────────────────
   // When set, the main content area shows the dedicated per-event
@@ -171,15 +165,8 @@ export function App() {
     []
   );
 
-  // ── Persist local cache ────────────────────────────────────
-  useEffect(() => {
-    localStorage.setItem('aurum_events', JSON.stringify(events));
-  }, [events]);
-
-  useEffect(() => {
-    localStorage.setItem('aurum_submissions', JSON.stringify(submissions));
-  }, [submissions]);
-
+  // ── Persist non-authoritative UI logs only ─────────────────
+  // Events and submissions intentionally are NOT persisted to localStorage.
   useEffect(() => {
     localStorage.setItem('aurum_logs', JSON.stringify(logs));
   }, [logs]);
@@ -248,12 +235,8 @@ export function App() {
           isMultiPart: row.is_multi_part ?? undefined
         }));
 
-        setEvents(prev => {
-          const serverIds = new Set(mappedEvents.map(e => e.id));
-          const localOnly = prev.filter(e => !serverIds.has(e.id));
-          if (!hasSyncedRef.current) hasSyncedRef.current = true;
-          return [...localOnly, ...mappedEvents];
-        });
+        if (!hasSyncedRef.current) hasSyncedRef.current = true;
+        setEvents(mappedEvents);
       }
 
       // ── Registrations + campers ────────────────────────────
@@ -280,11 +263,7 @@ export function App() {
           })
         );
 
-        setSubmissions(prev => {
-          const serverIds = new Set(mappedSubmissions.map(s => s.id));
-          const localOnly = prev.filter(s => !serverIds.has(s.id));
-          return [...localOnly, ...mappedSubmissions];
-        });
+        setSubmissions(mappedSubmissions);
       }
     };
 
@@ -295,12 +274,21 @@ export function App() {
     };
   }, [supabaseConfig?.url, supabaseConfig?.anonKey]);
 
-  // ── Hash routing for public form ──────────────────────────
+  // ── Hash routing for public form and protected camper-list entry ─────────
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash || '';
-      const match = hash.match(PUBLIC_FORM_HASH_RE);
-      setPublicEventId(match ? match[1] : null);
+
+      const camperMatch = hash.match(CAMPER_LIST_HASH_RE);
+      if (camperMatch) {
+        setCamperListEventId(camperMatch[1]);
+        setPublicEventId(null);
+        return;
+      }
+
+      const formMatch = hash.match(PUBLIC_FORM_HASH_RE);
+      setPublicEventId(formMatch ? formMatch[1] : null);
+      setCamperListEventId(null);
     };
 
     handleHashChange();
@@ -311,70 +299,110 @@ export function App() {
   // ── Handler: Add or Update Event ──────────────────────────
   const handleSaveEvent = async (savedEvent: RegistrationEvent) => {
     const client = getSupabaseClient();
+
+    if (!client) {
+      alert(
+        'The event was NOT saved because the Supabase database is unavailable. Please check the connection and try again.'
+      );
+      return;
+    }
+
     const existingEvent = events.find(e => e.id === savedEvent.id);
-    const existingIndex = events.findIndex(e => e.id === savedEvent.id);
     const now = new Date().toISOString();
 
+    // Existing Supabase events keep their UUID. New/draft events receive a
+    // real UUID before they are written to the database.
     const eventId =
-      existingEvent?.id ||
-      (savedEvent.id && UUID_RE.test(savedEvent.id)
-        ? savedEvent.id
-        : safeRandomUUID());
+      existingEvent?.id && UUID_RE.test(existingEvent.id)
+        ? existingEvent.id
+        : savedEvent.id && UUID_RE.test(savedEvent.id)
+          ? savedEvent.id
+          : safeRandomUUID();
 
     const eventToSave: RegistrationEvent = {
       ...savedEvent,
       id: eventId,
-      created_at: savedEvent.created_at || now,
-      last_used_at: savedEvent.last_used_at || now
+      created_at: existingEvent?.created_at || savedEvent.created_at || now,
+      last_used_at: now
     };
 
-    setEvents(prev =>
-      existingIndex >= 0
-        ? prev.map(e => (e.id === savedEvent.id ? eventToSave : e))
-        : [eventToSave, ...prev]
-    );
+    const dbRow = {
+      id: eventToSave.id,
+      title: eventToSave.title,
+      slug: eventToSave.slug,
+      type: eventToSave.type,
+      category: eventToSave.category,
+      description: eventToSave.description,
+      location: eventToSave.location || null,
+      event_date: eventToSave.eventDate || null,
+      status: eventToSave.status,
+      fields: eventToSave.fields || [],
+      max_registrations: eventToSave.maxRegistrations ?? null,
+      submit_button_text: eventToSave.submitButtonText || null,
+      success_message: eventToSave.successMessage || null,
+      external_link: eventToSave.externalLink ?? null,
+      is_multi_part: eventToSave.isMultiPart ?? false,
+      created_at: eventToSave.created_at,
+      last_used_at: eventToSave.last_used_at
+    };
+
+    // Database first. The event must not appear in the admin UI or receive a
+    // public form link unless Supabase has accepted the exact same event ID.
+    const { data: persistedRow, error } = await client
+      .from('events')
+      .upsert(dbRow, { onConflict: 'id' })
+      .select('*')
+      .single();
+
+    if (error || !persistedRow) {
+      console.error('Supabase event save error:', error);
+      alert(
+        `Event was NOT saved. No public registration link has been created.\n\n${
+          error?.message || 'Supabase did not return the saved event.'
+        }`
+      );
+      return;
+    }
+
+    const persistedEvent: RegistrationEvent = {
+      id: persistedRow.id,
+      title: persistedRow.title,
+      slug: persistedRow.slug,
+      type: persistedRow.type,
+      category: persistedRow.category,
+      description: persistedRow.description || '',
+      location: persistedRow.location || undefined,
+      eventDate: persistedRow.event_date || undefined,
+      status: persistedRow.status,
+      themeBanner: persistedRow.theme_banner || undefined,
+      fields: Array.isArray(persistedRow.fields) ? persistedRow.fields : [],
+      created_at: persistedRow.created_at,
+      last_used_at: persistedRow.last_used_at,
+      maxRegistrations: persistedRow.max_registrations ?? undefined,
+      submitButtonText: persistedRow.submit_button_text ?? undefined,
+      successMessage: persistedRow.success_message ?? undefined,
+      externalLink: persistedRow.external_link ?? undefined,
+      isMultiPart: persistedRow.is_multi_part ?? undefined
+    };
+
+    setEvents(prev => {
+      const exists = prev.some(e => e.id === persistedEvent.id);
+      return exists
+        ? prev.map(e => (e.id === persistedEvent.id ? persistedEvent : e))
+        : [persistedEvent, ...prev];
+    });
 
     setIsFormBuilderOpen(false);
     setEditingEvent(undefined);
 
     pushLog(
-      existingIndex >= 0 ? 'Event Updated' : 'Event Created',
-      existingIndex >= 0
-        ? `Updated registration site "${eventToSave.title}"`
-        : `Created new registration site "${eventToSave.title}"`,
+      existingEvent ? 'Event Updated' : 'Event Created',
+      existingEvent
+        ? `Updated registration site "${persistedEvent.title}"`
+        : `Created new registration site "${persistedEvent.title}"`,
       'info',
-      eventToSave.id
+      persistedEvent.id
     );
-
-    if (client) {
-      const { error } = await client.from('events').upsert(
-        {
-          id: eventToSave.id,
-          title: eventToSave.title,
-          slug: eventToSave.slug,
-          type: eventToSave.type,
-          category: eventToSave.category,
-          description: eventToSave.description,
-          location: eventToSave.location || null,
-          event_date: eventToSave.eventDate || null,
-          status: eventToSave.status,
-          fields: eventToSave.fields || [],
-          max_registrations: eventToSave.maxRegistrations ?? null,
-          submit_button_text: eventToSave.submitButtonText || null,
-          success_message: eventToSave.successMessage || null,
-          created_at: eventToSave.created_at,
-          last_used_at: eventToSave.last_used_at
-        },
-        { onConflict: 'id' }
-      );
-
-      if (error) {
-        console.error('Supabase event save error:', error);
-        alert(
-          `Event was saved locally, but Supabase could not save it.\n\n${error.message}`
-        );
-      }
-    }
   };
 
   // ── Handler: Select Template ──────────────────────────────
@@ -590,6 +618,19 @@ export function App() {
     }
   };
 
+  // ── Camper list route short-circuit ───────────────────────
+  if (camperListEventId) {
+    return (
+      <CamperListPage
+        eventId={camperListEventId}
+        onBack={() => {
+          window.location.hash = `/form/${camperListEventId}`;
+          setCamperListEventId(null);
+        }}
+      />
+    );
+  }
+
   // ── Public route short-circuit ────────────────────────────
   if (publicEventId) {
     return (
@@ -722,13 +763,13 @@ export function App() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-serif font-bold text-amber-300">
-              AURUM REGISTRY
+              MYRRH REGISTRY
             </span>
-            <span>• No-Code Event & Pre-Registration Platform</span>
+            <span>• Event & Registration Platform</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400">
             <span>Supabase DB Enabled</span>
-            <span>Vercel Ready</span>
+            <span>Vercel Deployed</span>
             <span>Lyka Colinares</span>
           </div>
         </div>

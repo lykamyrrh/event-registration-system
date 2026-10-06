@@ -1,20 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { getSupabaseClient } from '../lib/supabase';
 import {
   ArrowLeft,
   Building2,
   CheckCircle2,
-  Clock,
+  Eye,
   GraduationCap,
   Loader2,
+  LockKeyhole,
   ShieldCheck,
   Users,
   XCircle
 } from 'lucide-react';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 interface Camper {
   fullName: string;
   badgeName: string;
@@ -31,9 +29,13 @@ interface DelegationRecord {
   campers: Camper[];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+interface CamperListPageProps {
+  eventId: string;
+  onBack: () => void;
+}
+
+const CHURCH_CODE_RE = /^CH-[A-Z0-9]{6}$/;
+
 const GRADE_LABEL: Record<string, string> = {
   elementary: 'Elementary',
   'junior high': 'Junior High',
@@ -44,11 +46,16 @@ const GRADE_LABEL: Record<string, string> = {
 
 const gradeBg = (level: string) => {
   switch (level) {
-    case 'elementary':      return 'bg-sky-100 text-sky-800 border-sky-200';
-    case 'junior high':     return 'bg-violet-100 text-violet-800 border-violet-200';
-    case 'senior high':     return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'college':         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    default:                return 'bg-slate-100 text-slate-700 border-slate-200';
+    case 'elementary':
+      return 'bg-sky-100 text-sky-800 border-sky-200';
+    case 'junior high':
+      return 'bg-violet-100 text-violet-800 border-violet-200';
+    case 'senior high':
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'college':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 };
 
@@ -61,13 +68,17 @@ const formatDate = (iso: string) =>
     minute: '2-digit'
   });
 
-// Normalise a raw row from Supabase into a list of Camper objects
 const extractCampers = (rowData: any): Camper[] => {
-  // Source 1 — joined `campers` table (preferred)
-  if (Array.isArray(rowData?.campers_joined) && rowData.campers_joined.length > 0) {
+  if (
+    Array.isArray(rowData?.campers_joined) &&
+    rowData.campers_joined.length > 0
+  ) {
     return rowData.campers_joined
       .slice()
-      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .sort(
+        (a: any, b: any) =>
+          (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      )
       .map((c: any) => ({
         fullName: c.full_name || '',
         badgeName: c.badge_name || '',
@@ -77,31 +88,43 @@ const extractCampers = (rowData: any): Camper[] => {
       }));
   }
 
-  // Source 2 — campers array embedded in the data JSONB
   const data = rowData?.data || {};
+
   if (Array.isArray(data.campers) && data.campers.length > 0) {
     return data.campers.map((c: any) => ({
       fullName: c.fullName || c.full_name || '',
       badgeName: c.badgeName || c.badge_name || '',
       age: c.age != null ? String(c.age) : '',
-      gradeLevel: c.gradeLevel || c.grade_level || 'junior high',
+      gradeLevel:
+        c.gradeLevel ||
+        c.grade_level ||
+        'junior high',
       gender: c.gender || 'male'
     }));
   }
 
-  // Source 3 — single-camper fields (legacy)
   const name =
     data.f_camper_full_name ||
     data.f_name ||
     data.f_fullname ||
     '';
+
   if (name) {
     return [
       {
         fullName: String(name),
-        badgeName: String(data.f_preferred_badge_name || '—'),
-        age: String(data.f_dob_age || data.f_age || '—'),
-        gradeLevel: String(data.f_academic_level || 'General'),
+        badgeName: String(
+          data.f_preferred_badge_name || '—'
+        ),
+        age: String(
+          data.f_dob_age ||
+          data.f_age ||
+          '—'
+        ),
+        gradeLevel: String(
+          data.f_academic_level ||
+          'General'
+        ),
         gender: String(data.f_gender || '—')
       }
     ];
@@ -110,54 +133,79 @@ const extractCampers = (rowData: any): Camper[] => {
   return [];
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Props
-// ─────────────────────────────────────────────────────────────────────────────
-interface CamperListPageProps {
-  eventId: string;
-  churchCode: string;
-  onBack: () => void;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
 export const CamperListPage: React.FC<CamperListPageProps> = ({
   eventId,
-  churchCode,
   onBack
 }) => {
-  const [loading, setLoading] = useState(true);
+  const [codeInput, setCodeInput] = useState('');
+  const [verifiedCode, setVerifiedCode] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [eventTitle, setEventTitle] = useState('');
   const [churchName, setChurchName] = useState('');
   const [delegations, setDelegations] = useState<DelegationRecord[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+  const handleCodeChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const normalized = event.target.value
+      .toUpperCase()
+      .replace(/[^A-Z0-9-]/g, '')
+      .slice(0, 9);
+
+    setCodeInput(normalized);
+
+    if (error) {
       setError('');
+    }
+  };
 
-      const client = getSupabaseClient();
-      if (!client) {
-        setError('Database not available. Please check your connection settings.');
-        setLoading(false);
-        return;
-      }
+  const handleVerify = async (
+    event: React.FormEvent
+  ) => {
+    event.preventDefault();
 
-      try {
-        // ── Fetch the event title ───────────────────────────────────────────
-        const { data: eventRow } = await client
+    const normalizedCode = codeInput
+      .trim()
+      .toUpperCase();
+
+    setError('');
+    setDelegations([]);
+    setVerifiedCode('');
+    setChurchName('');
+
+    if (!CHURCH_CODE_RE.test(normalizedCode)) {
+      setError(
+        'Enter a valid Church Registration Code in the format CH-XXXXXX.'
+      );
+      return;
+    }
+
+    const client = getSupabaseClient();
+
+    if (!client) {
+      setError(
+        'The registration database is not available right now. Please try again later.'
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Supabase/PostgREST query-builder filters are sent as structured
+      // parameters. We do not construct SQL from the visitor's input.
+      const [
+        { data: eventRow, error: eventError },
+        { data: rows, error: fetchError }
+      ] = await Promise.all([
+        client
           .from('events')
           .select('title')
           .eq('id', eventId)
-          .maybeSingle();
+          .maybeSingle(),
 
-        if (eventRow?.title) setEventTitle(eventRow.title);
-
-        // ── Fetch all registrations matching this church code + event ───────
-        // We join the campers table inline so we get structured rows.
-        const { data: rows, error: fetchErr } = await client
+        client
           .from('registrations')
           .select(`
             id,
@@ -174,313 +222,413 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({
             )
           `)
           .eq('event_id', eventId)
-          .eq('data->>church_registration_code', churchCode)
-          .order('submitted_at', { ascending: true });
+          .eq(
+            'data->>church_registration_code',
+            normalizedCode
+          )
+          .order('submitted_at', {
+            ascending: true
+          })
+      ]);
 
-        if (fetchErr) {
-          console.error('Camper list fetch error:', fetchErr);
-          setError('Could not load the camper list. Please try again.');
-          setLoading(false);
-          return;
-        }
+      if (eventError) {
+        console.error(
+          'Event lookup error:',
+          eventError
+        );
+      }
 
-        if (!rows || rows.length === 0) {
-          setDelegations([]);
-          setLoading(false);
-          return;
-        }
+      if (fetchError) {
+        console.error(
+          'Camper list lookup error:',
+          fetchError
+        );
 
-        // Use church name from the first record
-        const firstData = rows[0]?.data as any;
-        setChurchName(firstData?.f_church_name || '');
+        setError(
+          'We could not verify the Church Registration Code. Please try again.'
+        );
+        return;
+      }
 
-        // Map rows → DelegationRecord[]
-        const mapped: DelegationRecord[] = rows.map((row: any) => {
-          const d = row.data || {};
-          // Normalise joined campers under a temporary key
-          const withJoined = { ...row, campers_joined: row.campers };
+      // Deliberately use the same response for invalid code and no matching
+      // registration so the page does not reveal whether a church exists.
+      if (!rows || rows.length === 0) {
+        setError(
+          'The Church Registration Code could not be verified for this event.'
+        );
+        return;
+      }
+
+      const firstData = rows[0]?.data as any;
+
+      const mapped: DelegationRecord[] = rows.map(
+        (row: any) => {
+          const data = row.data || {};
+          const withJoined = {
+            ...row,
+            campers_joined: row.campers
+          };
+
           return {
             id: row.id,
             submittedAt: row.submitted_at,
             delegationHead:
-              d.f_delegation_fullname ||
-              d.f_delegation_head_name ||
-              d.f_name ||
+              data.f_delegation_fullname ||
+              data.f_delegation_head_name ||
+              data.f_name ||
               '—',
-            registrationType: d.registration_type || 'church',
+            registrationType:
+              data.registration_type ||
+              'church',
             campers: extractCampers(withJoined)
           };
-        });
+        }
+      );
 
-        setDelegations(mapped);
-      } catch (err) {
-        console.error(err);
-        setError('An unexpected error occurred. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
+      setEventTitle(
+        eventRow?.title ||
+        'AYOS Youth Camp 2026'
+      );
+      setChurchName(
+        firstData?.f_church_name ||
+        ''
+      );
+      setDelegations(mapped);
+      setVerifiedCode(normalizedCode);
 
-    load();
-  }, [eventId, churchCode]);
+      // Remove the typed secret from the input once verification succeeds.
+      setCodeInput('');
+    } catch (err) {
+      console.error(
+        'Camper list verification error:',
+        err
+      );
 
-  const totalCampers = delegations.reduce((sum, d) => sum + d.campers.length, 0);
-  let globalIndex = 0; // running camper number across all delegations
+      setError(
+        'An unexpected error occurred. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  const handleLockList = () => {
+    setVerifiedCode('');
+    setDelegations([]);
+    setChurchName('');
+    setCodeInput('');
+    setError('');
+  };
+
+  const totalCampers = delegations.reduce(
+    (sum, delegation) =>
+      sum + delegation.campers.length,
+    0
+  );
+
+  let globalIndex = 0;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 font-sans animate-fadeIn">
       <div className="max-w-3xl mx-auto space-y-8">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Registration Page
+        </button>
 
-        {/* ── Back button + header ───────────────────────────────── */}
-        <div className="space-y-4">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Registration Page
-          </button>
-
-          <div className="rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 p-6 flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-black text-slate-900/70 uppercase tracking-[0.2em]">
-                Registered Camper List
-              </p>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-950 leading-tight mt-0.5">
-                {eventTitle || 'Youth Camp 2026'}
-              </h1>
-              {churchName && (
-                <div className="flex items-center gap-1.5 mt-2">
-                  <Building2 className="w-4 h-4 text-slate-900/70" />
-                  <span className="text-sm font-bold text-slate-900/80">{churchName}</span>
+        {!verifiedCode ? (
+          <div className="max-w-xl mx-auto rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
+            <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-slate-950/15">
+                  <LockKeyhole className="w-6 h-6 text-slate-950" />
                 </div>
-              )}
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-[10px] font-bold text-slate-900/60 uppercase tracking-wider">
-                Church Code
-              </p>
-              <span className="font-mono font-black text-slate-950 text-sm tracking-widest">
-                {churchCode}
-              </span>
-            </div>
-          </div>
-        </div>
 
-        {/* ── Loading / Error / Empty states ─────────────────────── */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-            <p className="text-sm text-slate-400">Loading registered campers…</p>
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="rounded-2xl bg-red-950/40 border border-red-700/40 p-8 flex flex-col items-center gap-3 text-center">
-            <XCircle className="w-8 h-8 text-red-400" />
-            <p className="text-sm font-semibold text-red-300">{error}</p>
-          </div>
-        )}
-
-        {!loading && !error && delegations.length === 0 && (
-          <div className="rounded-2xl bg-slate-900 border border-slate-800 p-12 text-center space-y-3">
-            <Users className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-base font-bold text-slate-300">No campers found</p>
-            <p className="text-sm text-slate-500">
-              No registrations were found for church code{' '}
-              <span className="font-mono text-amber-400">{churchCode}</span> in this event.
-            </p>
-          </div>
-        )}
-
-        {/* ── Summary bar ─────────────────────────────────────────── */}
-        {!loading && !error && delegations.length > 0 && (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                  <Users className="w-5 h-5 text-amber-400" />
-                </div>
                 <div>
-                  <p className="text-[11px] text-slate-400">Total Campers</p>
-                  <p className="text-xl font-black text-amber-400">{totalCampers}</p>
+                  <p className="text-[10px] font-black text-slate-900/70 uppercase tracking-[0.2em]">
+                    Protected Camper List
+                  </p>
+
+                  <h1 className="text-xl font-black text-slate-950">
+                    Submitted Campers
+                  </h1>
                 </div>
               </div>
-              <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-slate-400">Delegations</p>
-                  <p className="text-xl font-black text-emerald-400">{delegations.length}</p>
-                </div>
+            </div>
+
+            <form
+              onSubmit={handleVerify}
+              className="p-6 space-y-5"
+            >
+              <div>
+                <label
+                  htmlFor="church-code"
+                  className="block text-xs font-bold text-slate-300 mb-2"
+                >
+                  Church Registration Code
+                </label>
+
+                <input
+                  id="church-code"
+                  type="text"
+                  value={codeInput}
+                  onChange={handleCodeChange}
+                  placeholder="CH-XXXXXX"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={9}
+                  disabled={loading}
+                  className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 font-mono text-sm tracking-widest text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                />
+
+                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                  Enter the code provided after your church registration.
+                  The code is not included in this page's URL.
+                </p>
               </div>
-              <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex items-center gap-3 col-span-2 sm:col-span-1">
-                <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/30">
-                  <ShieldCheck className="w-5 h-5 text-violet-400" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-slate-400">Status</p>
-                  <p className="text-xs font-black text-violet-300 uppercase tracking-wider">
-                    Pre-Registered
+
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl bg-red-950/40 border border-red-700/40 p-3"
+                >
+                  <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-300">
+                    {error}
                   </p>
                 </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 disabled:cursor-not-allowed text-slate-950 px-4 py-3 text-sm font-black transition"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Verifying…
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4" />
+                    View Submitted Campers
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-start gap-2 text-[10px] text-slate-500 leading-relaxed">
+                <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-500" />
+                <p>
+                  Camper information is shown only after the code matches a registration for this event.
+                </p>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black text-slate-900/70 uppercase tracking-[0.2em]">
+                  Registered Camper List
+                </p>
+
+                <h1 className="text-xl sm:text-2xl font-black text-slate-950 leading-tight mt-0.5">
+                  {eventTitle}
+                </h1>
+
+                {churchName && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <Building2 className="w-4 h-4 text-slate-900/70" />
+                    <span className="text-sm font-bold text-slate-900/80">
+                      {churchName}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLockList}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-950/15 hover:bg-slate-950/25 px-3 py-2 text-xs font-black text-slate-950 transition"
+              >
+                <LockKeyhole className="w-3.5 h-3.5" />
+                Lock List
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+                <p className="text-[11px] text-slate-400">
+                  Total Campers
+                </p>
+                <p className="text-xl font-black text-amber-400">
+                  {totalCampers}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+                <p className="text-[11px] text-slate-400">
+                  Delegations
+                </p>
+                <p className="text-xl font-black text-emerald-400">
+                  {delegations.length}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 col-span-2 sm:col-span-1">
+                <p className="text-[11px] text-slate-400">
+                  Status
+                </p>
+                <p className="text-xs font-black text-violet-300 uppercase tracking-wider mt-1">
+                  Pre-Registered
+                </p>
               </div>
             </div>
 
-            {/* ── Confirmation badge ─────────────────────────────────── */}
             <div className="flex items-center gap-3 py-3 px-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               <p className="text-sm font-bold text-emerald-300">
-                ✓ The following campers are officially in the{' '}
+                ✓ The following campers are registered for{' '}
                 <span className="text-emerald-200">
-                  {eventTitle || 'YOUTH CAMP 2026'}
-                </span>{' '}
-                registration list
+                  {eventTitle}
+                </span>
               </p>
             </div>
 
-            {/* ── Delegation cards ───────────────────────────────────── */}
             <div className="space-y-6">
-              {delegations.map((delegation, dIdx) => (
-                <div
-                  key={delegation.id}
-                  className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden"
-                >
-                  {/* Delegation header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                        Delegation #{dIdx + 1}
-                      </span>
-                      <span className="text-sm font-bold text-slate-100">
-                        {delegation.delegationHead}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
-                          delegation.registrationType === 'church'
-                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
-                            : 'bg-purple-500/10 border-purple-500/30 text-purple-300'
-                        }`}
-                      >
-                        {delegation.registrationType === 'church'
-                          ? 'Initial Registration'
-                          : 'Add-On Delegation'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                      <Clock className="w-3 h-3" />
-                      <span>{formatDate(delegation.submittedAt)}</span>
-                    </div>
-                  </div>
+              {delegations.map(
+                (delegation, delegationIndex) => (
+                  <div
+                    key={delegation.id}
+                    className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-3 border-b border-slate-800">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                          Delegation #{delegationIndex + 1}
+                        </span>
 
-                  {/* Camper table */}
-                  <div className="overflow-x-auto">
-                    {delegation.campers.length === 0 ? (
-                      <p className="px-5 py-4 text-xs text-slate-600 italic">
-                        No campers recorded in this delegation.
-                      </p>
-                    ) : (
-                      <table className="w-full text-xs min-w-[520px]">
+                        <span className="text-xs text-slate-400">
+                          {delegation.delegationHead}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-slate-500">
+                        {formatDate(
+                          delegation.submittedAt
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[620px] text-xs">
                         <thead>
-                          <tr className="text-[9px] uppercase tracking-wider text-slate-500 bg-slate-950/60">
-                            <th className="px-4 py-2 font-black text-left w-10">#</th>
-                            <th className="px-4 py-2 font-black text-left">Full Name</th>
-                            <th className="px-4 py-2 font-black text-left">Badge Name</th>
-                            <th className="px-4 py-2 font-black text-center w-14">Age</th>
-                            <th className="px-4 py-2 font-black text-left">Grade Level</th>
-                            <th className="px-4 py-2 font-black text-left w-16">Gender</th>
-                            <th className="px-4 py-2 font-black text-center w-20">Status</th>
+                          <tr className="bg-slate-950/50 text-[9px] uppercase tracking-wider text-slate-500">
+                            <th className="px-4 py-3 text-left">
+                              #
+                            </th>
+                            <th className="px-4 py-3 text-left">
+                              Name
+                            </th>
+                            <th className="px-4 py-3 text-left">
+                              Badge
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              Age
+                            </th>
+                            <th className="px-4 py-3 text-left">
+                              Level
+                            </th>
+                            <th className="px-4 py-3 text-center">
+                              Sex
+                            </th>
                           </tr>
                         </thead>
+
                         <tbody className="divide-y divide-slate-800">
-                          {delegation.campers.map((c, cIdx) => {
-                            globalIndex += 1;
-                            const gIdx = globalIndex;
-                            return (
-                              <tr
-                                key={cIdx}
-                                className={
-                                  cIdx % 2 === 0
-                                    ? 'bg-transparent'
-                                    : 'bg-slate-900/40'
-                                }
+                          {delegation.campers.map(
+                            (camper, camperIndex) => {
+                              globalIndex += 1;
+
+                              return (
+                                <tr
+                                  key={`${delegation.id}-${camperIndex}`}
+                                  className="hover:bg-slate-800/40"
+                                >
+                                  <td className="px-4 py-3 text-slate-500 font-mono">
+                                    {globalIndex}
+                                  </td>
+
+                                  <td className="px-4 py-3 font-semibold text-slate-100">
+                                    {camper.fullName || '—'}
+                                  </td>
+
+                                  <td className="px-4 py-3 text-slate-400">
+                                    {camper.badgeName || '—'}
+                                  </td>
+
+                                  <td className="px-4 py-3 text-center text-slate-400">
+                                    {camper.age || '—'}
+                                  </td>
+
+                                  <td className="px-4 py-3">
+                                    <span
+                                      className={`text-[9px] font-bold px-2 py-1 rounded border ${
+                                        gradeBg(
+                                          camper.gradeLevel
+                                        )
+                                      }`}
+                                    >
+                                      {GRADE_LABEL[
+                                        camper.gradeLevel
+                                      ] ??
+                                        camper.gradeLevel}
+                                    </span>
+                                  </td>
+
+                                  <td className="px-4 py-3 text-center">
+                                    {camper.gender === 'male'
+                                      ? 'M'
+                                      : camper.gender === 'female'
+                                        ? 'F'
+                                        : camper.gender}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          )}
+
+                          {delegation.campers.length ===
+                            0 && (
+                            <tr>
+                              <td
+                                colSpan={6}
+                                className="px-4 py-6 text-center text-slate-500 italic"
                               >
-                                <td className="px-4 py-2.5 text-slate-500 font-mono font-bold">
-                                  {gIdx}
-                                </td>
-                                <td className="px-4 py-2.5 font-semibold text-slate-100">
-                                  {c.fullName || '—'}
-                                </td>
-                                <td className="px-4 py-2.5 text-slate-400">
-                                  {c.badgeName || '—'}
-                                </td>
-                                <td className="px-4 py-2.5 text-center text-slate-400">
-                                  {c.age || '—'}
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  <span
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded border ${gradeBg(c.gradeLevel)}`}
-                                  >
-                                    {GRADE_LABEL[c.gradeLevel] ?? c.gradeLevel}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  <span
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                      c.gender === 'male'
-                                        ? 'bg-blue-100 text-blue-700 border-blue-200'
-                                        : c.gender === 'female'
-                                        ? 'bg-pink-100 text-pink-700 border-pink-200'
-                                        : 'bg-slate-100 text-slate-700 border-slate-200'
-                                    }`}
-                                  >
-                                    {c.gender === 'male'
-                                      ? 'Male'
-                                      : c.gender === 'female'
-                                      ? 'Female'
-                                      : c.gender || '—'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-center">
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 uppercase tracking-wider">
-                                    <CheckCircle2 className="w-2.5 h-2.5" />
-                                    Listed
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                No camper records found in this delegation.
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
-                    )}
+                    </div>
                   </div>
-
-                  {/* Delegation footer */}
-                  <div className="px-5 py-2 border-t border-slate-800 bg-slate-950/30 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-500">
-                      <GraduationCap className="w-3 h-3 inline mr-1" />
-                      {delegation.campers.length}{' '}
-                      {delegation.campers.length === 1 ? 'camper' : 'campers'} in this delegation
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-600">
-                      Ref: {delegation.id.slice(-8).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
 
-            {/* ── Footer back button ─────────────────────────────────── */}
-            <div className="flex justify-center pt-4 pb-8">
-              <button
-                onClick={onBack}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-sm transition"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Registration Page
-              </button>
+            <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-4 text-center">
+              <GraduationCap className="w-5 h-5 text-amber-400 mx-auto mb-2" />
+              <p className="text-[11px] text-slate-500">
+                Keep your Church Registration Code private.
+                Use “Lock List” when you are finished viewing camper information.
+              </p>
             </div>
           </>
         )}

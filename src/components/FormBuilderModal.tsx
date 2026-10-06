@@ -269,7 +269,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  No-Code Form Builder & Field Injector
+                  Form Builder & Field Injector
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                   SUPABASE READY
@@ -346,24 +346,23 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                        Event Category
+                        Category
                       </label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value as EventCategory)}
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-slate-800 transition shadow-sm"
                       >
-                        <option value="camp">Youth Camp / Retreat</option>
-                        <option value="general">General Event</option>
-                        <option value="conference">Conference / Summit</option>
-                        <option value="workshop">Workshop / Webinar</option>
-                        <option value="gala">Gala / Special Occasion</option>
+                        <option value="camp">Youth Camp </option>
+                        <option value="general">General Event </option>
+                        <option value="conference">Conference </option>
+                        <option value="workshop">Workshop </option>
                       </select>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                        Registration Type
+                        Form Type
                       </label>
                       <select
                         value={type}
@@ -372,7 +371,6 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                       >
                         <option value="pre-registration">Two-Part Pre-Registration</option>
                         <option value="registration">Standard Registration</option>
-                        <option value="waitlist">Waitlist</option>
                       </select>
                     </div>
                   </div>
@@ -923,7 +921,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition"
           >
             <Check className="w-4 h-4 text-amber-400" />
-            <span>Publish & Save Site</span>
+            <span>Publish Site</span>
           </button>
         </div>
 

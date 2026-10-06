@@ -12,7 +12,6 @@ import {
   Users,
   Trash2,
   UserPlus,
-  Code,
   Check,
   Copy,
   ShieldCheck
@@ -29,15 +28,22 @@ interface PublicRegistrationPageProps {
 
 /**
  * Persists camper rows for a submission into the `campers` table.
- * No-ops silently if Supabase isn't available or the list is empty.
+ *
+ * This is part of the registration transaction from the UI's point of view:
+ * if the camper rows cannot be saved, the caller treats the submission as
+ * failed and removes the registration row that was just created.
  */
 const persistCampersForSubmission = async (
-  client: ReturnType<typeof getSupabaseClient> | null,
+  client: ReturnType<typeof getSupabaseClient>,
   submissionId: string,
   eventId: string,
   campers: CamperItem[]
 ) => {
-  if (!client || !submissionId || !campers?.length) return;
+  if (!client) {
+    throw new Error('The registration database is not available.');
+  }
+
+  if (!submissionId || !campers?.length) return;
 
   const rows = campers.map((c, idx) => ({
     submission_id: submissionId,
@@ -51,7 +57,10 @@ const persistCampersForSubmission = async (
   }));
 
   const { error } = await client.from('campers').insert(rows);
-  if (error) console.warn('Supabase campers insert error:', error);
+
+  if (error) {
+    throw new Error(`Camper records could not be saved: ${error.message}`);
+  }
 };
 
 export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
@@ -137,57 +146,15 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         }
       }
 
-      if (!loadedEvent) {
-        const savedEvents = localStorage.getItem('aurum_events');
-        if (savedEvents) {
-          try {
-            const parsed = JSON.parse(savedEvents);
-            loadedEvent = parsed.find((e: RegistrationEvent) => e.id === eventId) || null;
-          } catch {
-            loadedEvent = null;
-          }
-        }
-      }
-
+      // Supabase is the only source of truth for public events.
+      // Never fall back to a browser-only event: registrations.event_id has a
+      // foreign key to events.id, so a local-only event can never accept a
+      // valid registration.
       setEvent(loadedEvent);
 
-      if (loadedEvent) {
-        const registrationKey = `aurum_registered_church_${eventId}`;
-        const savedRegistration = localStorage.getItem(registrationKey);
+      // Do not restore a church from browser storage.
+      // Returning churches must explicitly verify their Church Registration Code.
 
-        if (savedRegistration) {
-          try {
-            const saved = JSON.parse(savedRegistration);
-            let registrationData: Record<string, any> | null = null;
-            const registrationId: string | null = saved.registrationId || null;
-
-            if (client && registrationId) {
-              const { data } = await client
-                .from('registrations')
-                .select('id,data')
-                .eq('id', registrationId)
-                .eq('event_id', eventId)
-                .maybeSingle();
-
-              if (data?.data) registrationData = data.data;
-            }
-
-            if (!registrationData && saved.formData) {
-              registrationData = saved.formData;
-            }
-
-            if (registrationData) {
-              setExistingChurchFormData(registrationData);
-              setExistingRegistrationId(registrationId);
-              setChurchRegistrationCode(registrationData.church_registration_code || '');
-              setFormData(registrationData);
-              setIsReturningChurch(true);
-            }
-          } catch {
-            localStorage.removeItem(registrationKey);
-          }
-        }
-      }
 
       setIsCheckingRegistration(false);
     };
@@ -355,19 +322,33 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     if (isYouthCamp) {
       for (let i = 0; i < campers.length; i++) {
         const c = campers[i];
+
         if (!c.fullName.trim()) {
           alert(`Validation Error: Please enter Full Name for Camper #${i + 1}.`);
           return;
         }
+
         if (!c.badgeName.trim()) {
           alert(`Validation Error: Please enter Preferred Badge Name for Camper #${i + 1}.`);
           return;
         }
+
         if (!c.age.trim() || isNaN(Number(c.age))) {
           alert(`Validation Error: Please enter a valid numeric Age for Camper #${i + 1}.`);
           return;
         }
       }
+    }
+
+    const client = getSupabaseClient();
+
+    // Supabase is the source of truth. Never show a successful registration
+    // when the browser is not connected to the registration database.
+    if (!client) {
+      alert(
+        'Registration could not be submitted because the registration database is unavailable. Please refresh the page and try again.'
+      );
+      return;
     }
 
     const subId = `AYOS-2026-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -410,13 +391,14 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       total_campers_count: campers.length
     };
 
-    setSubmissionId(subId);
-    setSubmittedJsonPayload(JSON.stringify(payload, null, 2));
-
-    const client = getSupabaseClient();
     const registrationCode = isAddingDelegation
       ? existingChurchFormData?.church_registration_code || churchRegistrationCode
       : await generateChurchRegistrationCode(client);
+
+    if (!registrationCode) {
+      alert('A Church Registration Code could not be generated. Please try again.');
+      return;
+    }
 
     const submissionData: Record<string, any> = isAddingDelegation
       ? {
@@ -435,84 +417,120 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
           parent_registration_id: null
         };
 
-    // Persist to Supabase if available
-    let savedRegistrationId: string | null = existingRegistrationId;
+    let insertedRegistrationId: string | null = null;
 
-    if (client) {
-      try {
-        const { data: inserted, error: insertError } = await client
-          .from('registrations')
-          .insert({
-            event_id: event.id,
-            data: submissionData,
-            submitted_at: new Date().toISOString()
-          })
-          .select('id')
-          .single();
-
-        if (insertError) {
-          console.error('Registration insert error:', insertError);
-        } else if (inserted) {
-          savedRegistrationId = inserted.id;
-
-          // ⬅️ NEW: mirror campers into the dedicated `campers` table so
-          // the organizer dashboard's join finds them immediately.
-          if (isYouthCamp && campers.length > 0) {
-            await persistCampersForSubmission(
-              client,
-              inserted.id,
-              event.id,
-              campers
-            );
-          }
-        }
-      } catch (err) {
-        console.error('Supabase registration error:', err);
-      }
-    }
-
-    // Remember this browser's church registration so reopening the same public link
-    // goes directly to the Add Delegation panel.
-    if (!isAddingDelegation) {
-      localStorage.setItem(
-        `aurum_registered_church_${event.id}`,
-        JSON.stringify({
-          registrationId: savedRegistrationId,
-          formData: submissionData,
-          churchName: submissionData.f_church_name || ''
+    try {
+      // 1. The registration row MUST exist before the UI can report success.
+      const { data: inserted, error: insertError } = await client
+        .from('registrations')
+        .insert({
+          event_id: event.id,
+          data: submissionData,
+          submitted_at: new Date().toISOString()
         })
-      );
-      setExistingChurchFormData(submissionData);
-      setExistingRegistrationId(savedRegistrationId);
-      setChurchRegistrationCode(registrationCode);
-      setIsReturningChurch(true);
-    }
+        .select('id')
+        .single();
 
-    const savedEvents = localStorage.getItem('aurum_events');
-    if (savedEvents) {
-      try {
-        const events = JSON.parse(savedEvents);
-        const updatedEvents = events.map((e: RegistrationEvent) =>
-          e.id === event.id ? { ...e, last_used_at: new Date().toISOString() } : e
+      if (insertError || !inserted?.id) {
+        throw new Error(insertError?.message || 'The registration record was not created.');
+      }
+
+      const savedRegistrationId = inserted.id;
+      insertedRegistrationId = savedRegistrationId;
+
+      // 2. Mirror the roster into the dedicated campers table used by the
+      // organizer/admin side. A failure here must not produce a false success.
+      if (isYouthCamp && campers.length > 0) {
+        try {
+          await persistCampersForSubmission(
+            client,
+            savedRegistrationId,
+            event.id,
+            campers
+          );
+        } catch (camperError) {
+          // Best-effort rollback so an incomplete registration is not left
+          // behind when the camper roster could not be persisted.
+          const { error: rollbackError } = await client
+            .from('registrations')
+            .delete()
+            .eq('id', savedRegistrationId);
+
+          if (rollbackError) {
+            console.error('Registration rollback error:', rollbackError);
+          }
+
+          throw camperError;
+        }
+      }
+
+      // 3. Verify that the church code was actually persisted and is readable
+      // through the same policies used by the returning-church flow.
+      const { data: persistedRegistration, error: verifyError } = await client
+        .from('registrations')
+        .select('id,data')
+        .eq('id', insertedRegistrationId)
+        .eq('event_id', event.id)
+        .eq('data->>church_registration_code', registrationCode)
+        .maybeSingle();
+
+      if (verifyError || !persistedRegistration?.id) {
+        throw new Error(
+          verifyError?.message ||
+            'The registration was saved but could not be verified. Please contact the organizer.'
         );
-        localStorage.setItem('aurum_events', JSON.stringify(updatedEvents));
-      } catch {
-        // Supabase is the source of truth; local cache is optional.
       }
+
+      // Only now is the registration considered successful.
+      setSubmissionId(subId);
+      setSubmittedJsonPayload(JSON.stringify(payload, null, 2));
+
+      if (!isAddingDelegation) {
+        setExistingChurchFormData(submissionData);
+        setExistingRegistrationId(insertedRegistrationId);
+        setChurchRegistrationCode(registrationCode);
+      }
+
+      const savedEvents = localStorage.getItem('aurum_events');
+
+      if (savedEvents) {
+        try {
+          const events = JSON.parse(savedEvents);
+          const updatedEvents = events.map((e: RegistrationEvent) =>
+            e.id === event.id ? { ...e, last_used_at: new Date().toISOString() } : e
+          );
+
+          localStorage.setItem('aurum_events', JSON.stringify(updatedEvents));
+        } catch {
+          // Supabase is the source of truth; local event cache is optional.
+        }
+      }
+
+      // Session-only UI history. This is deliberately NOT persisted to
+      // localStorage, so refreshing the browser never authenticates a church.
+      setSessionDelegations(prev => [
+        ...prev,
+        {
+          submissionReference: subId,
+          submittedAt: new Date().toISOString(),
+          campers: [...campers],
+          delegationNumber: prev.length + 1
+        }
+      ]);
+
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error('Supabase registration error:', err);
+
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'The registration could not be saved. Please try again.';
+
+      alert(
+        `Registration was NOT submitted. No confirmation has been issued.\n\n${message}`
+      );
     }
-
-    // Push to session delegations so the receipt card is shown on the Add Delegation page
-    setSessionDelegations(prev => [
-      ...prev,
-      {
-        submissionReference: subId,
-        submittedAt: new Date().toISOString(),
-        campers: [...campers],
-        delegationNumber: prev.length + 1
-      }
-    ]);
-
-    setIsSubmitted(true);
   };
 
   const handleCopyJson = () => {
@@ -550,7 +568,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between">
         <span className="text-xs text-amber-400 font-mono flex items-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-amber-500" />
-          AYOS YOUTH CAMP 2026 Pre-Registration Mode
+          AYOS YOUTH CAMP 2026 Pre-Registration
         </span>
       </div>
 
@@ -640,11 +658,12 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 </div>
                 <p className="text-xs text-slate-400 text-center -mt-2">
                   The following campers are already in the YOUTH CAMP 2026 list.
-                  Screenshot or print your receipt as proof.
+                  Screenshot your list as proof.
                 </p>
                 {sessionDelegations.map(d => (
                   <RegistrationReceiptCard
                     key={d.submissionReference}
+                    eventId={eventId}
                     eventTitle={event?.title || 'AYOS Youth Camp 2026'}
                     churchName={existingChurchFormData?.f_church_name || ''}
                     pastorName={existingChurchFormData?.f_pastor_fullname}
@@ -663,6 +682,18 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 ))}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                window.open(`/#/campers/${encodeURIComponent(eventId)}`, '_blank', 'noopener,noreferrer');
+              }}
+              className="w-full py-4 rounded-2xl bg-slate-950 border border-amber-500/50 hover:bg-amber-500/10 text-amber-300 font-extrabold text-base transition-all flex items-center justify-center gap-2"
+            >
+              <Users className="w-5 h-5" />
+              <span>View Submitted Campers</span>
+              <ExternalLink className="w-4 h-4" />
+            </button>
 
             <button
               type="button"
@@ -705,7 +736,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                     </h3>
                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                       Enter your Church Registration Code to open your church panel and add another
-                      delegation without registering the church, pastor, or delegation head again.
+                      delegation without registering the church again.
                     </p>
                   </div>
                 </div>
@@ -814,7 +845,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                             PART 1 OF 2
                           </span>
                           <h3 className="text-lg font-bold text-slate-100 font-display">
-                            Church & Delegation Information
+                            Church & Delegation Head Information
                           </h3>
                         </div>
                       </div>
@@ -984,7 +1015,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                     {customPart1Fields.length > 0 && (
                       <div className="space-y-3 pt-4 border-t border-slate-800">
                         <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                          4. Additional Delegation Fields
+                          4. Additional Delegation 
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {customPart1Fields.map(f => (
@@ -1047,7 +1078,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                         PART 2 OF 2
                       </span>
                       <h3 className="text-lg font-bold text-slate-100 font-display">
-                        Camper Roster (Dynamic Multi-Entry)
+                        Camper Roster 
                       </h3>
                     </div>
                   </div>
@@ -1223,7 +1254,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                   }}
                   className="w-full py-3 rounded-2xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white font-bold text-sm"
                 >
-                  Cancel and Return to Church Panel
+                   Return to Church Panel
                 </button>
               )}
 
@@ -1352,6 +1383,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             {/* ── Registration Receipt with QR Code ──────────────────── */}
             <div className="pt-2">
               <RegistrationReceiptCard
+                eventId={eventId}
                 eventTitle={event?.title || 'AYOS Youth Camp 2026'}
                 churchName={existingChurchFormData?.f_church_name || formData.f_church_name || ''}
                 pastorName={
