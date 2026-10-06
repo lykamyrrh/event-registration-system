@@ -1015,7 +1015,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                     {customPart1Fields.length > 0 && (
                       <div className="space-y-3 pt-4 border-t border-slate-800">
                         <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                          4. Additional Delegation 
+                          4. For First-Time Visitors
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {customPart1Fields.map(f => (
