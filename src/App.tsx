@@ -679,7 +679,7 @@ export function App() {
 
   const handleSaveEvent = async (
     savedEvent: RegistrationEvent
-  ) => {
+  ): Promise<boolean> => {
     const client =
       getSupabaseClient();
 
@@ -688,7 +688,7 @@ export function App() {
         'The event was NOT saved because the Supabase database is unavailable. Please check the connection and try again.'
       );
 
-      return;
+      return false;
     }
 
     const existingEvent =
@@ -805,7 +805,7 @@ export function App() {
           error?.message || 'Supabase did not return the saved event.'
         }`
       );
-      return;
+      return false;
     }
 
 
@@ -895,6 +895,7 @@ export function App() {
       'info',
       persistedEvent.id
     );
+    return true;
   };
 
   // ── Handler: Select Template ────────────────────────────────

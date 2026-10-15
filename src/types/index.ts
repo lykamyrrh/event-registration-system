@@ -8,7 +8,8 @@ export type FieldType =
   | 'date' 
   | 'textarea' 
   | 'number'
-  | 'link';
+  | 'link'
+  | 'file';
 
 export interface FormField {
   id: string;

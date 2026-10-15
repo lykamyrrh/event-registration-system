@@ -80,6 +80,8 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
   // Part 1 Form Data State
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [receiptFiles, setReceiptFiles] = useState<Record<string, File>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Part 2 Dynamic Camper Roster State
   const [campers, setCampers] = useState<CamperItem[]>([
@@ -141,7 +143,9 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             last_used_at: data.last_used_at,
             maxRegistrations: data.max_registrations || undefined,
             submitButtonText: data.submit_button_text || undefined,
-            successMessage: data.success_message || undefined
+            successMessage: data.success_message || undefined,
+            isMultiPart: data.is_multi_part ?? (data.type === 'pre-registration'),
+            externalLink: data.external_link || undefined
           };
         }
       }
@@ -166,10 +170,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     return <div className="p-10 text-center">Loading form...</div>;
   }
 
-  const isYouthCamp =
-    event.category === 'camp' ||
-    (event as any).isMultiPart ||
-    event.slug.includes('ayos');
+  const isYouthCamp = event.type === 'pre-registration';
 
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
@@ -303,6 +304,12 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try { await submitRegistration(); } finally { setIsSubmitting(false); }
+  };
+
+  const submitRegistration = async () => {
 
     // Client-side validation: Part 1 is only required for the first church registration.
     if (!isAddingDelegation) {
@@ -311,7 +318,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         : event.fields;
 
       for (const field of part1Fields) {
-        if (field.required && !formData[field.id] && formData[field.id] !== 0) {
+        if (field.required && (field.type === 'file' ? !receiptFiles[field.id] : !formData[field.id] && formData[field.id] !== 0)) {
           alert(`Validation Error: Please complete required field "${field.label}".`);
           return;
         }
@@ -388,7 +395,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             gender: c.gender
           }))
         : [],
-      total_campers_count: campers.length
+      total_campers_count: isYouthCamp ? campers.length : 0
     };
 
     const registrationCode = isAddingDelegation
@@ -400,10 +407,37 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       return;
     }
 
+    // Upload receipts before writing the registration. Only private object paths
+    // are saved in the database; never put a public receipt URL in JSON.
+    const uploadedReceiptPaths: string[] = [];
+    const receiptData: Record<string, string> = {};
+    try {
+      for (const [fieldId, file] of Object.entries(receiptFiles)) {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+          throw new Error('Receipt must be JPG, PNG, or WebP and no larger than 5 MB.');
+        }
+        const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+        const path = `${event.id}/${crypto.randomUUID()}/${fieldId}.${ext}`;
+        const { error } = await client.storage.from('payment-receipts').upload(path, file, {
+          contentType: file.type, upsert: false
+        });
+        if (error) throw new Error(`Receipt upload failed: ${error.message}`);
+        uploadedReceiptPaths.push(path);
+        receiptData[fieldId] = path;
+      }
+    } catch (error) {
+      for (const path of uploadedReceiptPaths) {
+        await client.storage.from('payment-receipts').remove([path]);
+      }
+      alert(error instanceof Error ? error.message : 'Receipt upload failed.');
+      return;
+    }
+
     const submissionData: Record<string, any> = isAddingDelegation
       ? {
           ...(existingChurchFormData || {}),
           ...formData,
+          ...receiptData,
           campers,
           church_registration_code: registrationCode,
           registration_type: 'delegation',
@@ -411,6 +445,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         }
       : {
           ...formData,
+          ...receiptData,
           campers,
           church_registration_code: registrationCode,
           registration_type: 'church',
@@ -560,8 +595,9 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   ];
 
   const customPart1Fields = event.fields.filter(
-    f => (f.section === 'part1' || !f.section) && !standardPart1FieldIds.includes(f.id)
+    f => (!isYouthCamp || f.section === 'part1' || !f.section) && !standardPart1FieldIds.includes(f.id)
   );
+  const customPart2Fields = isYouthCamp ? event.fields.filter(f => f.section === 'part2') : [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 animate-fadeIn font-sans">
@@ -851,7 +887,8 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                       </div>
                     </div>
 
-                    {/* Church Details Subsection */}
+                    {isYouthCamp && <>
+                  {/* Church Details Subsection */}
                     <div className="space-y-3">
                       <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
                         1. Church Details
@@ -1011,7 +1048,8 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                       </div>
                     </div>
 
-                    {/* Additional Deployed Custom Part 1 Fields */}
+                    </>}
+                  {/* Additional Deployed Custom Part 1 Fields */}
                     {customPart1Fields.length > 0 && (
                       <div className="space-y-3 pt-4 border-t border-slate-800">
                         <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
@@ -1024,7 +1062,16 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                                 {f.label} {f.required && <span className="text-amber-400">*</span>}
                               </label>
 
-                              {f.type === 'textarea' ? (
+                              {f.type === 'file' ? (
+                                <input type="file" accept="image/jpeg,image/png,image/webp"
+                                  required={f.required} onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (file && (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+                                      alert('Select a JPG, PNG, or WebP image under 5 MB.'); e.target.value = ''; return;
+                                    }
+                                    setReceiptFiles(prev => { const next = {...prev}; if (file) next[f.id] = file; else delete next[f.id]; return next; });
+                                  }} className="w-full text-xs text-slate-200" />
+                              ) : f.type === 'textarea' ? (
                                 <textarea
                                   rows={2}
                                   required={f.required}
@@ -1067,7 +1114,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
               )}
 
               {/* PART 2: CAMPER ROSTER (DYNAMIC MULTI-ENTRY) */}
-              <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 space-y-6 shadow-sm">
+              {isYouthCamp && <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 space-y-6 shadow-sm">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
@@ -1243,8 +1290,15 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                   <UserPlus className="w-4 h-4 text-amber-400" />
                   <span>+ Add Another Camper</span>
                 </button>
-              </div>
+              </div>}
 
+              {isYouthCamp && customPart2Fields.map(f => (
+                <label key={f.id} className="block text-sm text-slate-200">{f.label}
+                  <input required={f.required} type={f.type === 'number' ? 'number' : 'text'}
+                    value={formData[f.id] || ''} onChange={e => handleInputChange(f.id, e.target.value)}
+                    className="block w-full mt-2 p-3 rounded-lg bg-slate-900 border border-slate-700" />
+                </label>
+              ))}
               {isAddingDelegation && (
                 <button
                   type="button"
@@ -1260,13 +1314,14 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Send className="w-5 h-5 text-slate-950" />
                 <span>
                   {isAddingDelegation
                     ? 'Submit New Delegation'
-                    : 'Submit AYOS Youth Camp Pre-Registration'}
+                    : isSubmitting ? 'Submitting...' : (event.submitButtonText || 'Submit Registration')}
                 </span>
               </button>
             </form>
