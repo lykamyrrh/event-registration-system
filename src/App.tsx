@@ -34,8 +34,7 @@ const UUID_RE =
 const PUBLIC_FORM_HASH_RE = /^#\/form\/([a-zA-Z0-9-]+)$/;
 const CAMPER_LIST_HASH_RE = /^#\/campers\/([a-zA-Z0-9-]+)$/;
 
-const ADMIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-const ADMIN_LAST_ACTIVITY_KEY = 'myrrh_admin_last_activity';
+
 
 const safeRandomUUID = (): string => {
   if (
@@ -232,7 +231,7 @@ export function App() {
   ] = useState<string | null>(null);
 
   const hasSyncedRef = useRef(false);
-  const lastAdminActivityRef = useRef(Date.now());
+
 
   // ═══════════════════════════════════════════════════════════
   // Administrator authentication + admin_users authorization
@@ -323,47 +322,11 @@ export function App() {
           return;
         }
 
-        const now = Date.now();
-        const storedActivity = Number(
-          localStorage.getItem(ADMIN_LAST_ACTIVITY_KEY)
-        );
-
-        // A page refresh, reopened tab, or laptop wake must not silently
-        // extend an old administrator session past the idle limit.
-        if (
-          Number.isFinite(storedActivity) &&
-          storedActivity > 0 &&
-          now - storedActivity >= ADMIN_IDLE_TIMEOUT_MS
-        ) {
-          localStorage.removeItem(ADMIN_LAST_ACTIVITY_KEY);
-          await client.auth.signOut();
-
-          if (!mounted) return;
-
-          setIsAuthenticated(false);
-          setIsAuthorizedAdmin(false);
-          setAuthError(
-            'Your administrator session expired after 5 minutes of inactivity. Please sign in again.'
-          );
-          setIsAuthChecking(false);
-          return;
-        }
-
-        const activityTime =
-          Number.isFinite(storedActivity) && storedActivity > 0
-            ? storedActivity
-            : now;
-
-        lastAdminActivityRef.current = activityTime;
-        localStorage.setItem(
-          ADMIN_LAST_ACTIVITY_KEY,
-          String(activityTime)
-        );
-
         setIsAuthenticated(true);
         setIsAuthorizedAdmin(true);
         setAuthError(null);
         setIsAuthChecking(false);
+
       } catch (error) {
         console.error(
           'Administrator authentication failed:',
@@ -449,181 +412,9 @@ export function App() {
     supabaseConfig?.anonKey
   ]);
 
-  // ═══════════════════════════════════════════════════════════
-  // Five-minute administrator inactivity timeout
-  // ═══════════════════════════════════════════════════════════
-
-  useEffect(() => {
-    if (!isAuthenticated || !isAuthorizedAdmin) return;
-
-    const client = getSupabaseClient();
-    if (!client) return;
-
-    let timeoutId: ReturnType<typeof window.setTimeout> | undefined;
-    let isSigningOut = false;
-
-    const clearIdleTimer = () => {
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
-    };
-
-    const clearSensitiveAdminState = () => {
-      setEvents([]);
-      setSubmissions([]);
-      setActiveTab('events');
-      setEventDataViewId(null);
-      setIsFormBuilderOpen(false);
-      setEditingEvent(undefined);
-      setIsAIAssistantOpen(false);
-    };
-
-    const logoutForInactivity = async () => {
-      if (isSigningOut) return;
-
-      isSigningOut = true;
-      clearIdleTimer();
-      localStorage.removeItem(ADMIN_LAST_ACTIVITY_KEY);
-
-      // Clear sensitive UI data immediately, then invalidate the real
-      // Supabase session rather than merely hiding the dashboard.
-      clearSensitiveAdminState();
-      setIsAuthorizedAdmin(false);
-      setIsAuthenticated(false);
-      setAuthError(
-        'Your administrator session expired after 5 minutes of inactivity. Please sign in again.'
-      );
-
-      try {
-        await client.auth.signOut();
-      } catch (error) {
-        console.error(
-          'Automatic Supabase sign out failed:',
-          error
-        );
-      }
-    };
-
-    const scheduleIdleCheck = () => {
-      clearIdleTimer();
-
-      const elapsed =
-        Date.now() - lastAdminActivityRef.current;
-      const remaining = ADMIN_IDLE_TIMEOUT_MS - elapsed;
-
-      if (remaining <= 0) {
-        void logoutForInactivity();
-        return;
-      }
-
-      timeoutId = window.setTimeout(() => {
-        void logoutForInactivity();
-      }, remaining);
-    };
-
-    const registerActivity = () => {
-      if (isSigningOut) return;
-
-      const now = Date.now();
-      lastAdminActivityRef.current = now;
-      localStorage.setItem(ADMIN_LAST_ACTIVITY_KEY, String(now));
-      scheduleIdleCheck();
-    };
-
-    const checkElapsedIdleTime = () => {
-      if (isSigningOut) return;
-
-      const storedActivity = Number(
-        localStorage.getItem(ADMIN_LAST_ACTIVITY_KEY)
-      );
-
-      if (Number.isFinite(storedActivity) && storedActivity > 0) {
-        lastAdminActivityRef.current = storedActivity;
-      }
-
-      const elapsed =
-        Date.now() - lastAdminActivityRef.current;
-
-      if (elapsed >= ADMIN_IDLE_TIMEOUT_MS) {
-        void logoutForInactivity();
-        return;
-      }
-
-      scheduleIdleCheck();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkElapsedIdleTime();
-      }
-    };
-
-    const handleFocus = () => {
-      checkElapsedIdleTime();
-    };
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== ADMIN_LAST_ACTIVITY_KEY || !event.newValue) {
-        return;
-      }
-
-      const timestamp = Number(event.newValue);
-      if (!Number.isFinite(timestamp) || timestamp <= 0) return;
-
-      lastAdminActivityRef.current = timestamp;
-      scheduleIdleCheck();
-    };
-
-    const storedActivity = Number(
-      localStorage.getItem(ADMIN_LAST_ACTIVITY_KEY)
-    );
-
-    if (Number.isFinite(storedActivity) && storedActivity > 0) {
-      lastAdminActivityRef.current = storedActivity;
-    } else {
-      registerActivity();
-    }
-
-    const activityEvents: Array<keyof WindowEventMap> = [
-      'mousedown',
-      'keydown',
-      'touchstart',
-      'scroll'
-    ];
-
-    activityEvents.forEach(eventName => {
-      window.addEventListener(eventName, registerActivity, {
-        passive: true
-      });
-    });
-
-    document.addEventListener(
-      'visibilitychange',
-      handleVisibilityChange
-    );
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('storage', handleStorage);
-
-    checkElapsedIdleTime();
-
-    return () => {
-      clearIdleTimer();
-
-      activityEvents.forEach(eventName => {
-        window.removeEventListener(eventName, registerActivity);
-      });
-
-      document.removeEventListener(
-        'visibilitychange',
-        handleVisibilityChange
-      );
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, [isAuthenticated, isAuthorizedAdmin]);
 
   // ── Log helper ──────────────────────────────────────────────
+
 
   const pushLog = useCallback(
     (
@@ -928,73 +719,95 @@ export function App() {
       last_used_at: now
     };
 
-    const dbRow = {
+    // ── Build the DB row ──────────────────────────────────────────────────
+    // NOTE: external_link and is_multi_part require the following columns to
+    // exist in your Supabase `events` table. If they are missing the upsert
+    // will fail; we detect that and retry without them so the app never
+    // hard-blocks.  Run this in the Supabase SQL editor to add them:
+    //
+    //   ALTER TABLE events
+    //     ADD COLUMN IF NOT EXISTS external_link  jsonb    DEFAULT NULL,
+    //     ADD COLUMN IF NOT EXISTS is_multi_part  boolean  DEFAULT false;
+    //
+    const dbRowFull = {
       id: eventToSave.id,
       title: eventToSave.title,
       slug: eventToSave.slug,
       type: eventToSave.type,
-      category:
-        eventToSave.category,
-      description:
-        eventToSave.description,
-      location:
-        eventToSave.location || null,
-      event_date:
-        eventToSave.eventDate || null,
+      category: eventToSave.category,
+      description: eventToSave.description,
+      location: eventToSave.location || null,
+      event_date: eventToSave.eventDate || null,
       status: eventToSave.status,
-      fields:
-        eventToSave.fields || [],
-      max_registrations:
-        eventToSave.maxRegistrations ??
-        null,
-      submit_button_text:
-        eventToSave.submitButtonText ||
-        null,
-      success_message:
-        eventToSave.successMessage ||
-        null,
-      external_link:
-        eventToSave.externalLink ??
-        null,
-      is_multi_part:
-        eventToSave.isMultiPart ??
-        false,
-      created_at:
-        eventToSave.created_at,
-      last_used_at:
-        eventToSave.last_used_at
+      fields: eventToSave.fields || [],
+      max_registrations: eventToSave.maxRegistrations ?? null,
+      submit_button_text: eventToSave.submitButtonText || null,
+      success_message: eventToSave.successMessage || null,
+      external_link: eventToSave.externalLink ?? null,
+      is_multi_part: eventToSave.isMultiPart ?? false,
+      created_at: eventToSave.created_at,
+      last_used_at: eventToSave.last_used_at
     };
 
-    const {
-      data: persistedRow,
-      error
-    } = await client
-      .from('events')
-      .upsert(
-        dbRow,
-        { onConflict: 'id' }
-      )
-      .select('*')
-      .single();
+    // Core columns that are guaranteed to exist in every schema version
+    const dbRowCore = {
+      id: eventToSave.id,
+      title: eventToSave.title,
+      slug: eventToSave.slug,
+      type: eventToSave.type,
+      category: eventToSave.category,
+      description: eventToSave.description,
+      location: eventToSave.location || null,
+      event_date: eventToSave.eventDate || null,
+      status: eventToSave.status,
+      fields: eventToSave.fields || [],
+      max_registrations: eventToSave.maxRegistrations ?? null,
+      submit_button_text: eventToSave.submitButtonText || null,
+      success_message: eventToSave.successMessage || null,
+      created_at: eventToSave.created_at,
+      last_used_at: eventToSave.last_used_at
+    };
 
+    // ── Try full upsert; fall back to core-only if schema is missing cols ─
+    let persistedRow: any = null;
+    let error: any = null;
+
+    ({ data: persistedRow, error } = await client
+      .from('events')
+      .upsert(dbRowFull, { onConflict: 'id' })
+      .select('*')
+      .single());
+
+    // If the error is about a missing column, retry with the safe subset
     if (
-      error ||
-      !persistedRow
+      error &&
+      (error.message?.includes('external_link') ||
+        error.message?.includes('is_multi_part') ||
+        error.code === '42703' // undefined_column in PostgreSQL
+      )
     ) {
-      console.error(
-        'Supabase event save error:',
-        error
+      console.warn(
+        'Supabase: external_link / is_multi_part columns missing — retrying without them.',
+        'Run the migration SQL shown in the source comment to fix this permanently.'
       );
 
+      ({ data: persistedRow, error } = await client
+        .from('events')
+        .upsert(dbRowCore, { onConflict: 'id' })
+        .select('*')
+        .single());
+    }
+
+    if (error || !persistedRow) {
+      console.error('Supabase event save error:', error);
       alert(
         `Event was NOT saved. No public registration link has been created.\n\n${
-          error?.message ||
-          'Supabase did not return the saved event.'
+          error?.message || 'Supabase did not return the saved event.'
         }`
       );
-
       return;
     }
+
 
     const persistedEvent:
       RegistrationEvent = {
@@ -1041,11 +854,9 @@ export function App() {
         persistedRow.success_message ??
         undefined,
       externalLink:
-        persistedRow.external_link ??
-        undefined,
+        persistedRow.external_link ?? eventToSave.externalLink ?? undefined,
       isMultiPart:
-        persistedRow.is_multi_part ??
-        undefined
+        persistedRow.is_multi_part ?? eventToSave.isMultiPart ?? undefined
     };
 
     setEvents(prev => {

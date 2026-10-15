@@ -516,7 +516,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <p className="text-[11px] leading-relaxed text-navy-900/60">
                 Protected administrator area. Authentication is
-                handled securely through Supabase. Access is
+                handled securely. Access is
                 limited to authorized MYRRH Registry
                 administrators.
               </p>
