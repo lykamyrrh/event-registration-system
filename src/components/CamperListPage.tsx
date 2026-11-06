@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   XCircle
 } from 'lucide-react';
+import { useVirtualizer } from 'react-window';
 
 interface Camper {
   fullName: string;
@@ -124,6 +125,10 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({
   const [eventTitle, setEventTitle] = useState('');
   const [churchName, setChurchName] = useState('');
   const [delegations, setDelegations] = useState<DelegationRecord[]>([]);
+
+  // Refs for the virtualizer
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  const [tbody, setTbody] = useState<HTMLTableSectionElement | null>(null);
 
   const handleCodeChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -301,7 +306,26 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({
     0
   );
 
-  let globalIndex = 0;
+  // Flatten all campers for the virtualizer
+  const allCampers = delegations.flatMap((delegation) =>
+    delegation.campers.map((camper) => ({
+      ...camper,
+      delegationId: delegation.id
+    }))
+  );
+
+  // Set up the virtualizer
+  const { items, totalSize } = useVirtualizer({
+    count: allCampers.length,
+    element: tbody,
+    itemSize: 49, // Height of each table row in px
+    scrollElement,
+  });
+
+  const first = items[0];
+  const last = items[items.length - 1];
+  const spaceBefore = first ? first.offset : 0;
+  const spaceAfter = last ? totalSize - last.offset - last.size : 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 font-sans animate-fadeIn">
@@ -458,67 +482,74 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({
             </div>
 
             <div className="space-y-6">
-              <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[620px] text-xs">
-                    <thead>
-                      <tr className="bg-slate-950/50 text-[9px] uppercase tracking-wider text-slate-500">
-                        <th className="px-4 py-3 text-left">#</th>
-                        <th className="px-4 py-3 text-left">Name</th>
-                        <th className="px-4 py-3 text-left">Badge</th>
-                        <th className="px-4 py-3 text-center">Age</th>
-                        <th className="px-4 py-3 text-left">Level</th>
-                        <th className="px-4 py-3 text-center">Sex</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {delegations.flatMap((delegation, delegationIndex) => 
-                        delegation.campers.map((camper, camperIndex) => {
-                          globalIndex += 1;
-                          return (
-                            <tr
-                              key={`${delegation.id}-${camperIndex}`}
-                              className="hover:bg-slate-800/40"
-                            >
-                              <td className="px-4 py-3 text-slate-500 font-mono">
-                                {globalIndex}
-                              </td>
-                              <td className="px-4 py-3 font-semibold text-slate-100">
-                                {camper.fullName || '—'}
-                              </td>
-                              <td className="px-4 py-3 text-slate-400">
-                                {camper.badgeName || '—'}
-                              </td>
-                              <td className="px-4 py-3 text-center text-slate-400">
-                                {camper.age || '—'}
-                              </td>
-                              
-                              <td className="px-4 py-3 text-slate-300">
-                                {GRADE_LABEL[camper.gradeLevel] ?? camper.gradeLevel}
-                              </td>
-                              
-                              <td className="px-4 py-3 text-center text-slate-300">
-                                {camper.gender === 'male'
-                                  ? 'M'
-                                  : camper.gender === 'female'
-                                  ? 'F'
-                                  : camper.gender}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                      
-                      {totalCampers === 0 && (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-6 text-center text-slate-500 italic">
-                            No camper records found.
+              <div 
+                className="rounded-2xl bg-slate-900 border border-slate-800 overflow-x-auto"
+                ref={setScrollElement}
+                style={{ height: '500px', overflowY: 'auto' }}
+              >
+                <table className="w-full min-w-[620px] text-xs">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-slate-950 text-[9px] uppercase tracking-wider text-slate-500 shadow-sm">
+                      <th className="px-4 py-3 text-left">#</th>
+                      <th className="px-4 py-3 text-left">Name</th>
+                      <th className="px-4 py-3 text-left">Badge</th>
+                      <th className="px-4 py-3 text-center">Age</th>
+                      <th className="px-4 py-3 text-left">Level</th>
+                      <th className="px-4 py-3 text-center">Sex</th>
+                    </tr>
+                  </thead>
+                  <tbody ref={setTbody} className="divide-y divide-slate-800">
+                    {/* Spacer row for items above the viewport */}
+                    {spaceBefore > 0 && (
+                      <tr aria-hidden style={{ height: spaceBefore }} />
+                    )}
+
+                    {items.map(({ index, size }) => {
+                      const camper = allCampers[index];
+                      return (
+                        <tr
+                          key={`${camper.delegationId}-${index}`}
+                          style={{ height: size }}
+                          className="hover:bg-slate-800/40"
+                        >
+                          <td className="px-4 py-3 text-slate-500 font-mono">
+                            {index + 1}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-100">
+                            {camper.fullName || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-400">
+                            {camper.badgeName || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-400">
+                            {camper.age || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {GRADE_LABEL[camper.gradeLevel] ?? camper.gradeLevel}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-300">
+                            {camper.gender === 'male'
+                              ? 'M'
+                              : camper.gender === 'female'
+                              ? 'F'
+                              : camper.gender}
                           </td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      );
+                    })}
+
+                    {/* Spacer row for items below the viewport */}
+                    {spaceAfter > 0 && (
+                      <tr aria-hidden style={{ height: spaceAfter }} />
+                    )}
+                  </tbody>
+                </table>
+
+                {totalCampers === 0 && (
+                  <div className="px-4 py-6 text-center text-slate-500 italic">
+                    No camper records found.
+                  </div>
+                )}
               </div>
             </div>
 
