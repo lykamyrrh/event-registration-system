@@ -502,125 +502,80 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({
             </div>
 
             <div className="space-y-6">
-              {delegations.map(
-                (delegation, delegationIndex) => (
-                  <div
-                    key={delegation.id}
-                    className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-3 border-b border-slate-800">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                          Delegation #{delegationIndex + 1}
-                        </span>
-
-                        <span className="text-xs text-slate-400">
-                          {delegation.delegationHead}
-                        </span>
-                      </div>
-
-                      <span className="text-[10px] text-slate-500">
-                        {formatDate(
-                          delegation.submittedAt
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[620px] text-xs">
-                        <thead>
-                          <tr className="bg-slate-950/50 text-[9px] uppercase tracking-wider text-slate-500">
-                            <th className="px-4 py-3 text-left">
-                              #
-                            </th>
-                            <th className="px-4 py-3 text-left">
-                              Name
-                            </th>
-                            <th className="px-4 py-3 text-left">
-                              Badge
-                            </th>
-                            <th className="px-4 py-3 text-center">
-                              Age
-                            </th>
-                            <th className="px-4 py-3 text-left">
-                              Level
-                            </th>
-                            <th className="px-4 py-3 text-center">
-                              Sex
-                            </th>
-                          </tr>
-                        </thead>
-
-                        <tbody className="divide-y divide-slate-800">
-                          {delegation.campers.map(
-                            (camper, camperIndex) => {
-                              globalIndex += 1;
-
-                              return (
-                                <tr
-                                  key={`${delegation.id}-${camperIndex}`}
-                                  className="hover:bg-slate-800/40"
-                                >
-                                  <td className="px-4 py-3 text-slate-500 font-mono">
-                                    {globalIndex}
-                                  </td>
-
-                                  <td className="px-4 py-3 font-semibold text-slate-100">
-                                    {camper.fullName || '—'}
-                                  </td>
-
-                                  <td className="px-4 py-3 text-slate-400">
-                                    {camper.badgeName || '—'}
-                                  </td>
-
-                                  <td className="px-4 py-3 text-center text-slate-400">
-                                    {camper.age || '—'}
-                                  </td>
-
-                                  <td className="px-4 py-3">
-                                    <span
-                                      className={`text-[9px] font-bold px-2 py-1 rounded border ${
-                                        gradeBg(
-                                          camper.gradeLevel
-                                        )
-                                      }`}
-                                    >
-                                      {GRADE_LABEL[
-                                        camper.gradeLevel
-                                      ] ??
-                                        camper.gradeLevel}
-                                    </span>
-                                  </td>
-
-                                  <td className="px-4 py-3 text-center">
-                                    {camper.gender === 'male'
-                                      ? 'M'
-                                      : camper.gender === 'female'
-                                        ? 'F'
-                                        : camper.gender}
-                                  </td>
-                                </tr>
-                              );
-                            }
-                          )}
-
-                          {delegation.campers.length ===
-                            0 && (
-                            <tr>
-                              <td
-                                colSpan={6}
-                                className="px-4 py-6 text-center text-slate-500 italic"
+                          {/* ── SINGLE FLATTENED TABLE ── */}
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[620px] text-xs">
+                  <thead>
+                    <tr className="bg-slate-950/50 text-[9px] uppercase tracking-wider text-slate-500">
+                      <th className="px-4 py-3 text-left">#</th>
+                      <th className="px-4 py-3 text-left">Name</th>
+                      <th className="px-4 py-3 text-left">Badge</th>
+                      <th className="px-4 py-3 text-center">Age</th>
+                      <th className="px-4 py-3 text-left">Level</th>
+                      <th className="px-4 py-3 text-center">Sex</th>
+                      <th className="px-4 py-3 text-left">Delegation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {delegations.flatMap((delegation, delegationIndex) => 
+                      delegation.campers.map((camper, camperIndex) => {
+                        globalIndex += 1;
+                        return (
+                          <tr
+                            key={`${delegation.id}-${camperIndex}`}
+                            className="hover:bg-slate-800/40"
+                          >
+                            <td className="px-4 py-3 text-slate-500 font-mono">
+                              {globalIndex}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-100">
+                              {camper.fullName || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-400">
+                              {camper.badgeName || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-center text-slate-400">
+                              {camper.age || '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`text-[9px] font-bold px-2 py-1 rounded border ${gradeBg(
+                                  camper.gradeLevel
+                                )}`}
                               >
-                                No camper records found in this delegation.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )
-              )}
+                                {GRADE_LABEL[camper.gradeLevel] ?? camper.gradeLevel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {camper.gender === 'male'
+                                ? 'M'
+                                : camper.gender === 'female'
+                                ? 'F'
+                                : camper.gender}
+                            </td>
+                            {/* Added a column to show which delegation they belong to */}
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                                #{delegationIndex + 1}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                    
+                    {totalCampers === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-6 text-center text-slate-500 italic">
+                          No camper records found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
             </div>
 
             <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-4 text-center">
