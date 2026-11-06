@@ -1347,6 +1347,16 @@ export function App() {
   // ═══════════════════════════════════════════════════════════
 
   // ── Camper list route ───────────────────────────────────────
+
+    if (camperListEventId) {
+    return (
+      <CamperListPage
+        eventId={
+          camperListEventId
+        }
+      />
+    );
+  }
   // ── Public registration route ───────────────────────────────
 
   if (publicEventId) {
