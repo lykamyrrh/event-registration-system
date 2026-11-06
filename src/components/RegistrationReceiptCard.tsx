@@ -187,7 +187,7 @@ export const RegistrationReceiptCard: React.FC<RegistrationReceiptCardProps> = (
                 <p className="text-[11px] text-slate-500 mt-1">
                   {displayedCamperCount}{' '}
                   {displayedCamperCount === 1 ? 'camper' : 'campers'} registered.
-                  Names are hidden from this receipt.
+                  
                 </p>
               </div>
 
@@ -205,7 +205,7 @@ export const RegistrationReceiptCard: React.FC<RegistrationReceiptCardProps> = (
             </button>
 
             <p className="text-[10px] text-slate-500 text-center leading-relaxed">
-              Opens in a new tab. Enter the Church Registration Code again to view the list.
+              Enter the Church Registration Code again to view the list.
             </p>
           </div>
 
@@ -228,12 +228,12 @@ export const RegistrationReceiptCard: React.FC<RegistrationReceiptCardProps> = (
           <div className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <p className="text-[11px] font-bold text-emerald-300 text-center leading-snug">
-              ✓ Registration successfully recorded for YOUTH CAMP 2026
+              Registration successfully recorded for YOUTH CAMP 2026
             </p>
           </div>
 
           <p className="text-center text-[10px] text-slate-600 leading-relaxed">
-            Keep your Church Registration Code private. It is required to view submitted camper information.
+            Keep your Church Registration Code. It is required to view submitted camper information.
           </p>
         </div>
       </div>

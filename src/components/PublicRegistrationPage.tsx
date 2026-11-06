@@ -633,7 +633,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 Welcome Back, {existingChurchFormData?.f_church_name || 'Church'}
               </h2>
               <p className="text-slate-300 text-sm max-w-xl mx-auto leading-relaxed">
-                Your church, pastor, and delegation head are already registered for this event. You do
+                Your church, pastor, and delegation head are already registered. You do
                 not need to enter those details again.
               </p>
             </div>
@@ -697,7 +697,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-px bg-slate-800" />
                   <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                    Your Registered Delegations
+                    Your Registered Campers
                   </p>
                   <div className="flex-1 h-px bg-slate-800" />
                 </div>
@@ -759,7 +759,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
               className="w-full py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2"
             >
               <UserPlus className="w-5 h-5" />
-              <span>Add Delegation</span>
+              <span>Add Campers</span>
             </button>
 
             <p className="text-center text-xs text-slate-400">
@@ -777,7 +777,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                   <ShieldCheck className="w-5 h-5 text-amber-400 mt-0.5" />
                   <div className="flex-1">
                     <h3 className="text-sm font-bold text-slate-100">
-                      Already registered your church?
+                      Already Registered your Church?
                     </h3>
                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                       Enter your Church Registration Code to open your church panel and add another
@@ -890,7 +890,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                             PART 1 OF 2
                           </span>
                           <h3 className="text-lg font-bold text-slate-100 font-display">
-                            Church & Delegation Head Information
+                            Church and Delegation Head Information
                           </h3>
                         </div>
                       </div>
@@ -910,7 +910,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           <input
                             type="text"
                             required
-                            placeholder="e.g. Grace Fellowship Church"
+                            placeholder="e.g. Bible Baptist Church"
                             value={formData['f_church_name'] || ''}
                             onChange={e => handleInputChange('f_church_name', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -923,7 +923,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           <input
                             type="text"
                             required
-                            placeholder="Street / Barangay"
+                            placeholder="Street/Barangay"
                             value={formData['f_church_address'] || ''}
                             onChange={e => handleInputChange('f_church_address', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -936,7 +936,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           <input
                             type="text"
                             required
-                            placeholder="e.g. Quezon City, Metro Manila"
+                            placeholder="e.g. Consolacion, Cebu"
                             value={formData['f_city_province'] || ''}
                             onChange={e => handleInputChange('f_city_province', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -984,7 +984,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           <input
                             type="email"
                             required
-                            placeholder="pastor@church.org"
+                            placeholder="pastor@gmail.com"
                             value={formData['f_pastor_email'] || ''}
                             onChange={e => handleInputChange('f_pastor_email', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -1006,7 +1006,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           <input
                             type="text"
                             required
-                            placeholder="David Reyes"
+                            placeholder="Kirk Ochia"
                             value={formData['f_delegation_fullname'] || ''}
                             onChange={e => handleInputChange('f_delegation_fullname', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -1048,7 +1048,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           <input
                             type="email"
                             required
-                            placeholder="delegation.head@church.org"
+                            placeholder="delegation.head@gmail.com"
                             value={formData['f_delegation_email'] || ''}
                             onChange={e => handleInputChange('f_delegation_email', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -1134,7 +1134,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                         PART 2 OF 2
                       </span>
                       <h3 className="text-lg font-bold text-slate-100 font-display">
-                        Camper Roster 
+                        Campers List
                       </h3>
                     </div>
                   </div>
@@ -1343,11 +1343,11 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             </div>
 
             <h2 className="text-3xl font-bold text-slate-100 font-display">
-              Pre-Registration Submitted!
+              Pre-Registration Successful
             </h2>
 
             <p className="text-amber-300 text-sm max-w-md mx-auto leading-relaxed">
-              Praise God! Your AYOS YOUTH CAMP 2026 pre-registration has been confirmed and is now officially recorded in our system. A confirmation email has been sent to the delegation head's email address. Please check your inbox (and spam folder) for the confirmation email.
+              Your AYOS YOUTH CAMP 2026 pre-registration has been confirmed and is now officially recorded! 
             </p>
 
             <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 max-w-xl mx-auto text-left space-y-4">
@@ -1376,7 +1376,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                       !
                     </span>
                     <span className="text-[11px] font-black text-amber-300 uppercase tracking-widest">
-                      ⚠ Save This Code — Important!
+                      Click to Save This Code — Important!
                     </span>
                   </div>
 
@@ -1428,7 +1428,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
                   <div className="pt-2 border-t border-amber-400/20">
                     <p className="text-[11px] text-amber-100/80 leading-relaxed">
-                       <strong>Click the code so save this down now.</strong> Use it with this event link to reopen your church panel and add
+                       <strong>Click the code to save this down now.</strong> Use it with this event link to reopen your church panel and add
                       another delegation without re-entering church details. 
                     </p>
                   </div>
@@ -1477,7 +1477,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 }}
                 className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold"
               >
-                Add Another Delegation
+                Add New Batch of Campers
               </button>
             </div>
           </div>
