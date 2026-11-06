@@ -555,10 +555,8 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({
                                 : camper.gender}
                             </td>
                             {/* Added a column to show which delegation they belong to */}
-                            <td className="px-4 py-3">
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                                #{delegationIndex + 1}
-                              </span>
+                            <td className="px-4 py-3 text-slate-300">
+                              {GRADE_LABEL[camper.gradeLevel] ?? camper.gradeLevel}
                             </td>
                           </tr>
                         );
