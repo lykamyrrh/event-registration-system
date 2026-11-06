@@ -772,11 +772,16 @@ export function App() {
     let persistedRow: any = null;
     let error: any = null;
 
-    ({ data: persistedRow, error } = await client
-      .from('events')
-      .upsert(dbRowFull, { onConflict: 'id' })
-      .select('*')
-      .single());
+    // Helper: attempt upsert with the given row payload
+    const attemptUpsert = async (row: Record<string, any>) => {
+      return client
+        .from('events')
+        .upsert(row, { onConflict: 'id' })
+        .select('*')
+        .single();
+    };
+
+    ({ data: persistedRow, error } = await attemptUpsert(dbRowFull));
 
     // If the error is about a missing column, retry with the safe subset
     if (
@@ -791,11 +796,35 @@ export function App() {
         'Run the migration SQL shown in the source comment to fix this permanently.'
       );
 
-      ({ data: persistedRow, error } = await client
-        .from('events')
-        .upsert(dbRowCore, { onConflict: 'id' })
-        .select('*')
-        .single());
+      ({ data: persistedRow, error } = await attemptUpsert(dbRowCore));
+    }
+
+    // ── Handle duplicate slug constraint (events_slug_key) ───────────────
+    // When creating a new event whose slug already exists in the DB, Supabase
+    // returns a 23505 (unique_violation) error referencing events_slug_key.
+    // Fix it by appending a numeric suffix and retrying.
+    if (
+      error &&
+      (error.code === '23505' || error.message?.includes('events_slug_key'))
+    ) {
+      const suffix = `-${Date.now().toString(36)}`;
+      const deduplicatedSlug = eventToSave.slug + suffix;
+      eventToSave.slug = deduplicatedSlug;
+      dbRowFull.slug = deduplicatedSlug;
+      dbRowCore.slug = deduplicatedSlug;
+      console.warn(`Slug collision — retrying with deduplicated slug: ${deduplicatedSlug}`);
+
+      ({ data: persistedRow, error } = await attemptUpsert(dbRowFull));
+
+      // Fall back to core if the full row still fails on missing columns
+      if (
+        error &&
+        (error.message?.includes('external_link') ||
+          error.message?.includes('is_multi_part') ||
+          error.code === '42703')
+      ) {
+        ({ data: persistedRow, error } = await attemptUpsert(dbRowCore));
+      }
     }
 
     if (error || !persistedRow) {

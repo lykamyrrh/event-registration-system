@@ -597,7 +597,16 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   const customPart1Fields = event.fields.filter(
     f => (!isYouthCamp || f.section === 'part1' || !f.section) && !standardPart1FieldIds.includes(f.id)
   );
-  const customPart2Fields = isYouthCamp ? event.fields.filter(f => f.section === 'part2') : [];
+  // Exclude the 5 built-in camper roster fields — they are already rendered
+  // as the structured camper cards above. Only truly custom part2 fields
+  // (added by the admin via injector packs) should appear here.
+  const BUILTIN_CAMPER_FIELD_IDS = [
+    'f_camper_full_name', 'f_preferred_badge_name', 'f_age',
+    'f_academic_level', 'f_gender'
+  ];
+  const customPart2Fields = isYouthCamp
+    ? event.fields.filter(f => f.section === 'part2' && !BUILTIN_CAMPER_FIELD_IDS.includes(f.id))
+    : [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 animate-fadeIn font-sans">

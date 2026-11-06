@@ -51,7 +51,7 @@ const DEFAULT_INJECTOR_PACKS: CustomInjectorPack[] = [
     iconName: 'DollarSign',
     fields: [
       { id: 'f_pay_ref', label: 'GCash / Bank Reference Number', type: 'text', placeholder: 'e.g. 100293848123', required: true, section: 'part1' },
-      { id: 'f_pay_link', label: 'Payment Receipt Link (Drive / Imgur)', type: 'file', required: true, helpText: 'Upload a JPG, PNG, or WebP payment receipt (maximum 5 MB)', section: 'part1' }
+      { id: 'f_pay_link', label: 'Payment Receipt (Screenshot Upload)', type: 'file', required: true, helpText: 'Upload a JPG, PNG, or WebP payment receipt (maximum 5 MB)', section: 'part1' }
     ]
   },
   {
@@ -84,9 +84,11 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
   const [activeView, setActiveView] = useState<'editor' | 'preview'>('editor');
 
   // Unpublished editor changes stay on this device, never in Supabase.
+  // sessionStorage keeps drafts alive within the same browser tab/session
+  // and auto-clears when the browser is closed.
   const draftKey = `myrrh_form_draft_${initialEvent?.id || 'new'}`;
   const [restoredDraft] = useState<any>(() => {
-    try { const raw = localStorage.getItem(draftKey); return raw ? JSON.parse(raw) : null; }
+    try { const raw = sessionStorage.getItem(draftKey); return raw ? JSON.parse(raw) : null; }
     catch { return null; }
   });
   const [draftStatus, setDraftStatus] = useState('Local draft');
@@ -118,7 +120,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
   useEffect(() => {
     const draft = { title, slug, type, category, description, location, eventDate,
       submitButtonText, successMessage, externalLinkLabel, externalLinkUrl, fields };
-    try { localStorage.setItem(draftKey, JSON.stringify(draft)); setDraftStatus('Saved on this device'); }
+    try { sessionStorage.setItem(draftKey, JSON.stringify(draft)); setDraftStatus('Saved on this device'); }
     catch { setDraftStatus('Unable to save locally — check browser storage'); }
   }, [draftKey, title, slug, type, category, description, location, eventDate,
       submitButtonText, successMessage, externalLinkLabel, externalLinkUrl, fields]);
@@ -269,7 +271,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
     };
 
     const published = await onSave(eventToSave);
-    if (published) localStorage.removeItem(draftKey);
+    if (published) sessionStorage.removeItem(draftKey);
   };
 
   return (
