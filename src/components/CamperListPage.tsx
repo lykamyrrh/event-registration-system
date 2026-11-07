@@ -322,7 +322,7 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({ eventId }) => {
               </button>
 
               <div className="flex items-start gap-2 text-[10px] text-slate-500 leading-relaxed">
-                <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-500" />
+                <ShieldCheck className="w-4 h-4 shrink-0 text-amber-500" />
                 <p>Camper information is shown only after the code matches a registration for this event.</p>
               </div>
             </form>
@@ -363,11 +363,11 @@ export const CamperListPage: React.FC<CamperListPageProps> = ({ eventId }) => {
               </div>
               <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4">
                 <p className="text-[11px] text-slate-400">Delegations</p>
-                <p className="text-xl font-black text-emerald-400">{delegations.length}</p>
+                <p className="text-xl font-black text-amber-400">{delegations.length}</p>
               </div>
               <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 col-span-2 sm:col-span-1">
                 <p className="text-[11px] text-slate-400">Status</p>
-                <p className="text-xs font-black text-violet-300 uppercase tracking-wider mt-1">Pre-Registered</p>
+                <p className="text-xs font-black text-gold-300 uppercase tracking-wider mt-1">Pre-Registered</p>
               </div>
             </div>
 

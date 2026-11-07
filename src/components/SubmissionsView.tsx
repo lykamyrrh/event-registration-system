@@ -40,13 +40,6 @@ interface SubmissionsViewProps {
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Resolves the camper list for a submission, trying sources in order:
- *   1. `sub.campers` — mapped camelCase array (from App.tsx join)
- *   2. `sub.campers_raw` — raw snake_case rows from Supabase join
- *   3. `sub.data.campers` — JSON snapshot saved by the public form
- *   4. Placeholder for single-registrant submissions
- */
 export const getCampersForSubmission = (
   sub: RegistrationSubmission
 ): CamperItem[] => {
@@ -149,7 +142,6 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
   ]);
   const extras = Object.entries(sub.data).filter(([k]) => !known.has(k));
 
-  // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -160,26 +152,26 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-navy-950/60 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-navy-200 my-8"
+        className="w-full max-w-5xl bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 my-8 text-slate-100"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-navy-100 sticky top-0 bg-white rounded-t-3xl z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 sticky top-0 bg-slate-900 rounded-t-3xl z-10">
           <div>
-            <h2 className="text-lg font-black text-navy-900">
+            <h2 className="text-lg font-black text-white">
               Delegation Details
             </h2>
-            <p className="text-xs text-navy-900/60">
+            <p className="text-xs text-slate-400">
               Ref #{sub.id.slice(-6)} · Event: {event?.title || 'Unknown'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-ivory border border-navy-200"
+            className="p-2 rounded-xl hover:bg-slate-800 border border-slate-700 transition-colors"
             title="Close"
           >
             <X className="w-4 h-4" />
@@ -189,21 +181,21 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
         {/* Body */}
         <div className="p-6 space-y-5">
           {/* Church + Pastor + Delegation Head */}
-          <div className="p-4 bg-white rounded-2xl border border-navy-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:divide-x md:divide-navy-100">
+          <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:divide-x md:divide-slate-800">
               {/* Church */}
               <div className="space-y-2 md:pr-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5" />
                   Church Information
                 </p>
-                <div className="space-y-1.5 text-xs text-navy-900">
+                <div className="space-y-1.5 text-xs text-slate-300">
                   <div className="flex items-start gap-2">
-                    <Building2 className="w-3.5 h-3.5 text-navy-900/50 mt-0.5 shrink-0" />
-                    <span className="font-semibold">{church}</span>
+                    <Building2 className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
+                    <span className="font-semibold text-white">{church}</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-navy-900/50 mt-0.5 shrink-0" />
+                    <MapPin className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
                     <span>
                       {String(sub.data.f_church_address || '—')}
                       {sub.data.f_city_province
@@ -213,8 +205,8 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                   </div>
                   {sub.data.f_church_registration_code && (
                     <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-3.5 h-3.5 text-navy-900/50 shrink-0" />
-                      <span className="font-mono font-bold text-gold-700">
+                      <ShieldCheck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span className="font-mono font-bold text-gold-300">
                         {String(sub.data.f_church_registration_code)}
                       </span>
                     </div>
@@ -224,26 +216,26 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
 
               {/* Pastor */}
               <div className="space-y-2 md:px-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Pastor
                 </p>
-                <div className="space-y-1 text-xs text-navy-900/80">
+                <div className="space-y-1 text-xs text-slate-300">
                   <div className="flex items-center gap-2">
-                    <User className="w-3 h-3 text-navy-900/50 shrink-0" />
-                    <span className="font-semibold text-navy-900">
+                    <User className="w-3 h-3 text-slate-500 shrink-0" />
+                    <span className="font-semibold text-white">
                       {pastor || '—'}
                     </span>
                   </div>
                   {sub.data.f_pastor_contact && (
                     <div className="flex items-center gap-2">
-                      <Phone className="w-3 h-3 text-navy-900/50 shrink-0" />
+                      <Phone className="w-3 h-3 text-slate-500 shrink-0" />
                       <span>{String(sub.data.f_pastor_contact)}</span>
                     </div>
                   )}
                   {sub.data.f_pastor_email && (
                     <div className="flex items-center gap-2">
-                      <Mail className="w-3 h-3 text-navy-900/50 shrink-0" />
+                      <Mail className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">
                         {String(sub.data.f_pastor_email)}
                       </span>
@@ -254,17 +246,17 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
 
               {/* Delegation Head */}
               <div className="space-y-2 md:pl-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Delegation Head
                 </p>
-                <div className="space-y-1 text-xs text-navy-900/80">
+                <div className="space-y-1 text-xs text-slate-300">
                   <div className="flex items-center gap-2">
-                    <User className="w-3 h-3 text-navy-900/50 shrink-0" />
-                    <span className="font-semibold text-navy-900">
+                    <User className="w-3 h-3 text-slate-500 shrink-0" />
+                    <span className="font-semibold text-white">
                       {leader}
                       {sub.data.f_delegation_role && (
-                        <span className="text-navy-900/60 font-normal">
+                        <span className="text-slate-400 font-normal">
                           {' '}
                           ({String(sub.data.f_delegation_role)})
                         </span>
@@ -273,13 +265,13 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                   </div>
                   {leaderPhone && (
                     <div className="flex items-center gap-2">
-                      <Phone className="w-3 h-3 text-navy-900/50 shrink-0" />
+                      <Phone className="w-3 h-3 text-slate-500 shrink-0" />
                       <span>{leaderPhone}</span>
                     </div>
                   )}
                   {sub.data.f_delegation_email && (
                     <div className="flex items-center gap-2">
-                      <Mail className="w-3 h-3 text-navy-900/50 shrink-0" />
+                      <Mail className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">
                         {String(sub.data.f_delegation_email)}
                       </span>
@@ -292,24 +284,24 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
 
           {/* Additional Fields */}
           {extras.length > 0 && (
-            <div className="p-4 bg-white rounded-2xl border border-navy-200 space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60">
+            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Additional Fields
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {extras.map(([key, val]) => (
                   <div key={key} className="space-y-0.5">
-                    <span className="text-[10px] font-bold text-navy-900/60 uppercase tracking-wider capitalize">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider capitalize">
                       {key.replace(/^f_/, '').replace(/_/g, ' ')}
                     </span>
-                    <div className="p-2 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs">
+                    <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-xs">
                       {key.includes('link') &&
                       String(val).startsWith('http') ? (
                         <a
                           href={String(val)}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-gold-700 underline font-mono flex items-center gap-1 font-bold break-all"
+                          className="text-amber-500 hover:text-amber-400 underline font-mono flex items-center gap-1 font-bold break-all"
                         >
                           <Link2 className="w-3 h-3 shrink-0" />
                           <span className="truncate">{String(val)}</span>
@@ -327,17 +319,17 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
           )}
 
           {/* Camper Roster */}
-          <div className="p-4 bg-white rounded-2xl border border-navy-200 space-y-3">
+          <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
                 Camper Roster ({campers.length})
               </p>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-navy-200">
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
               <table className="w-full text-xs">
-                <thead className="bg-ivory">
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-navy-900/70">
+                <thead className="bg-slate-900">
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400">
                     <th className="px-3 py-2 font-black">#</th>
                     <th className="px-3 py-2 font-black">Full Name</th>
                     <th className="px-3 py-2 font-black">Badge Name</th>
@@ -346,32 +338,32 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                     <th className="px-3 py-2 font-black">Gender</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-navy-100">
+                <tbody className="divide-y divide-slate-800">
                   {campers.map((c, i) => (
-                    <tr key={c.id || i} className="hover:bg-gold-50/40">
-                      <td className="px-3 py-2 text-navy-900/60 font-mono">
+                    <tr key={c.id || i} className="hover:bg-slate-800/50">
+                      <td className="px-3 py-2 text-slate-500 font-mono">
                         {i + 1}
                       </td>
-                      <td className="px-3 py-2 font-semibold text-navy-900">
+                      <td className="px-3 py-2 font-semibold text-white">
                         {c.fullName || '—'}
                       </td>
-                      <td className="px-3 py-2 text-navy-900/80">
+                      <td className="px-3 py-2 text-slate-300">
                         {c.badgeName || '—'}
                       </td>
-                      <td className="px-3 py-2 text-navy-900/80">
+                      <td className="px-3 py-2 text-slate-300">
                         {c.age || '—'}
                       </td>
-                      <td className="px-3 py-2 text-navy-900/80 capitalize">
+                      <td className="px-3 py-2 text-slate-300 capitalize">
                         {c.gradeLevel || '—'}
                       </td>
                       <td className="px-3 py-2">
                         <span
                           className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
                             c.gender === 'male'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                               : c.gender === 'female'
-                              ? 'bg-pink-50 text-pink-700 border border-pink-200'
-                              : 'bg-navy-50 text-navy-700 border border-navy-200'
+                              ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700'
                           }`}
                         >
                           {c.gender || '—'}
@@ -406,16 +398,9 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
   const [academicFilter, setAcademicFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-
-  // Which submission's detail modal is open
-  const [detailSubmissionId, setDetailSubmissionId] = useState<string | null>(
-    null
-  );
-
-  // Anchor for scroll-to-top on page change
+  const [detailSubmissionId, setDetailSubmissionId] = useState<string | null>(null);
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
   const detailSubmission = useMemo(
@@ -423,7 +408,6 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     [submissions, detailSubmissionId]
   );
 
-  // ── Derived: church list ──────────────────────────────────
   const availableChurches = useMemo(
     () =>
       Array.from(
@@ -436,7 +420,6 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     [submissions]
   );
 
-  // ── Filter submissions ────────────────────────────────────
   const filteredSubmissions = useMemo(() => {
     return submissions.filter(sub => {
       if (selectedEventId !== 'all' && sub.eventId !== selectedEventId)
@@ -514,7 +497,6 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     searchQuery
   ]);
 
-  // ── Reset to page 1 whenever any filter changes ───────────
   useEffect(() => {
     setPage(1);
   }, [
@@ -527,24 +509,20 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     pageSize
   ]);
 
-  // ── Paginated slice ───────────────────────────────────────
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredSubmissions.slice(start, start + pageSize);
   }, [filteredSubmissions, page, pageSize]);
 
-  // ── Scroll-to-top on page change ──────────────────────────
   useEffect(() => {
     if (listTopRef.current) {
       const top = listTopRef.current.offsetTop - 24;
       window.scrollTo({ top, behavior: 'smooth' });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const getEvent = (eventId: string) => events.find(e => e.id === eventId);
 
-  // Stats reflect the entire filtered set (not just the current page)
   const totalCampersInView = filteredSubmissions.reduce(
     (acc, sub) => acc + getCampersForSubmission(sub).length,
     0
@@ -554,7 +532,6 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     s => s.status === 'paid'
   ).length;
 
-  // ── CSV export ────────────────────────────────────────────
   const handleExportCSV = () => {
     if (filteredSubmissions.length === 0) {
       alert('No records available to export.');
@@ -636,23 +613,20 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     document.body.removeChild(link);
   };
 
-  // ══════════════════════════════════════════════════════════
-  // RENDER
-  // ══════════════════════════════════════════════════════════
   return (
-    <div className="space-y-8 animate-fadeIn font-sans text-navy-900">
+    <div className="space-y-8 animate-fadeIn font-sans text-slate-100">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-white border border-navy-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-100 border border-navy-200 text-navy-900 text-xs font-bold uppercase tracking-wider mb-2">
-            <Table className="w-3.5 h-3.5 text-navy-900" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-wider mb-2">
+            <Table className="w-3.5 h-3.5" />
             Global Master Table · Read-Only
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-navy-900">
+          <h1 className="text-2xl sm:text-3xl font-black text-white">
             All Submissions &amp;{' '}
-            <span className="text-gold-600">Data</span>
+            <span className="text-amber-500">Data</span>
           </h1>
-          <p className="text-navy-900/70 text-sm mt-1">
+          <p className="text-slate-400 text-sm mt-1">
             Cross-event read-only overview. Open any event from the Events tab
             to edit or delete records.
           </p>
@@ -660,7 +634,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
         <button
           onClick={handleExportCSV}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gold-500 hover:bg-gold-600 hover:text-white text-navy-950 font-bold text-sm shadow-md transition border border-gold-600/30"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md transition border border-amber-600/30"
         >
           <Download className="w-4 h-4" />
           <span>Export Unified CSV</span>
@@ -669,49 +643,49 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
       {/* Quick Stats Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gold-100 text-navy-900">
+        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-slate-800 text-amber-500">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-navy-900/70">Churches Count</div>
-            <div className="text-xl font-black text-navy-900">
+            <div className="text-xs text-slate-400">Churches Count</div>
+            <div className="text-xl font-black text-white">
               {availableChurches.length}
             </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300">
+        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-navy-900/70">Confirmed Paid</div>
-            <div className="text-xl font-black text-emerald-800">
+            <div className="text-xs text-slate-400">Confirmed Paid</div>
+            <div className="text-xl font-black text-amber-500">
               {totalPaidCount}
             </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gold-100 text-navy-900">
+        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-slate-800 text-gold-300">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-navy-900/70">Total Delegations</div>
-            <div className="text-xl font-black text-navy-900">
+            <div className="text-xs text-slate-400">Total Delegations</div>
+            <div className="text-xl font-black text-white">
               {filteredSubmissions.length}
             </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gold-100 text-navy-900">
+        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-slate-800 text-gold-300">
             <GraduationCap className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-navy-900/70">Total Campers Listed</div>
-            <div className="text-xl font-black text-navy-900">
+            <div className="text-xs text-slate-400">Total Campers Listed</div>
+            <div className="text-xl font-black text-white">
               {totalCampersInView}
             </div>
           </div>
@@ -719,25 +693,25 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
       </div>
 
       {/* Filters Toolbar */}
-      <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm space-y-3">
+      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
           <div className="sm:col-span-6 relative">
-            <Search className="w-4 h-4 text-navy-900/60 absolute left-3.5 top-3" />
+            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search camper name, badge, church, or pastor..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-sm focus:border-gold-500 focus:outline-none placeholder-navy-900/50"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-amber-500 focus:outline-none placeholder-slate-600"
             />
           </div>
 
           <div className="sm:col-span-6 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-navy-900/70 shrink-0" />
+            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
             <select
               value={selectedEventId}
               onChange={e => setSelectedEventId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-sm focus:border-gold-500 focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-amber-500 focus:outline-none"
             >
               <option value="all">All Events ({events.length})</option>
               {events.map(ev => (
@@ -752,13 +726,13 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-[11px] font-bold text-navy-900/70 uppercase tracking-wider mb-1">
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Status
             </label>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none font-medium"
+              className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none font-medium"
             >
               <option value="all">All Statuses</option>
               <option value="paid">Paid (Payment Confirmed)</option>
@@ -770,13 +744,13 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-navy-900/70 uppercase tracking-wider mb-1">
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Churches Filter
             </label>
             <select
               value={churchFilter}
               onChange={e => setChurchFilter(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none font-medium"
+              className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none font-medium"
             >
               <option value="all">
                 All Churches ({availableChurches.length})
@@ -790,13 +764,13 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-navy-900/70 uppercase tracking-wider mb-1">
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Role / Attendee Type
             </label>
             <select
               value={roleFilter}
               onChange={e => setRoleFilter(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none font-medium"
+              className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none font-medium"
             >
               <option value="all">All Roles</option>
               <option value="camper">Campers Only</option>
@@ -807,13 +781,13 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-navy-900/70 uppercase tracking-wider mb-1">
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Grade Level / Age Group
             </label>
             <select
               value={academicFilter}
               onChange={e => setAcademicFilter(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none font-medium"
+              className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none font-medium"
             >
               <option value="all">All Levels</option>
               <option value="elementary">Elementary</option>
@@ -826,14 +800,13 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
         </div>
       </div>
 
-      {/* Anchor used for scroll-to-top on page change */}
       <div ref={listTopRef} />
 
       {/* Submissions Table */}
-      <div className="rounded-2xl bg-white border border-navy-200 overflow-hidden shadow-sm">
+      <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-navy-900">
-            <thead className="bg-navy-900 text-xs font-bold text-navy-100 uppercase tracking-wider">
+          <table className="w-full text-left text-sm text-slate-100">
+            <thead className="bg-slate-950 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800">
               <tr>
                 <th className="px-5 py-3.5">Church &amp; Delegation</th>
                 <th className="px-5 py-3.5">Camper Roster Listing</th>
@@ -844,14 +817,14 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-navy-100">
+            <tbody className="divide-y divide-slate-800">
               {paginated.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-navy-900/70"
+                    className="px-6 py-12 text-center text-slate-400"
                   >
-                    <AlertCircle className="w-8 h-8 text-navy-900/40 mx-auto mb-2" />
+                    <AlertCircle className="w-8 h-8 text-slate-600 mx-auto mb-2" />
                     No pre-registration records match the current filter
                     selection.
                   </td>
@@ -897,24 +870,24 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                     <tr
                       key={sub.id}
                       onClick={() => setDetailSubmissionId(sub.id)}
-                      className="cursor-pointer odd:bg-white even:bg-ivory hover:bg-gold-50 transition-colors"
+                      className="cursor-pointer hover:bg-slate-800/50 transition-colors"
                     >
                       {/* Church & Delegation */}
                       <td className="px-5 py-4 align-top">
-                        <div className="font-bold text-navy-900 flex items-center gap-1.5 text-base">
-                          <Building2 className="w-4 h-4 text-navy-900/70 shrink-0" />
+                        <div className="font-bold text-white flex items-center gap-1.5 text-base">
+                          <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
                           <span>{church}</span>
                         </div>
                         {pastor && (
-                          <div className="text-xs text-navy-900/70 mt-0.5">
+                          <div className="text-xs text-slate-400 mt-0.5">
                             Pastor: {pastor}
                           </div>
                         )}
-                        <div className="text-xs text-navy-900 mt-1">
-                          Head: <span className="font-bold">{leader}</span>{' '}
+                        <div className="text-xs text-slate-300 mt-1">
+                          Head: <span className="font-bold text-white">{leader}</span>{' '}
                           {leaderPhone ? `(${leaderPhone})` : ''}
                         </div>
-                        <div className="text-[11px] text-navy-900/70 font-mono mt-1">
+                        <div className="text-[11px] text-slate-500 font-mono mt-1">
                           Ref #{sub.id.slice(-6)} · {ev?.title || 'Unknown'}
                         </div>
                       </td>
@@ -922,11 +895,11 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                       {/* Camper summary */}
                       <td className="px-5 py-4 align-top">
                         <div className="space-y-2 max-w-md">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-gold-100 border border-navy-200 text-navy-900">
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-amber-500">
                             {campersList.length} Camper
                             {campersList.length !== 1 ? 's' : ''}
                           </span>
-                          <div className="text-[11px] text-navy-900/70 italic">
+                          <div className="text-[11px] text-slate-500 italic">
                             Click row to view full roster
                           </div>
                         </div>
@@ -937,18 +910,18 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                         <span
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
                             sub.status === 'paid'
-                              ? 'bg-emerald-100 border-emerald-300 text-emerald-900 shadow-sm'
+                              ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 shadow-sm'
                               : sub.status === 'confirmed'
-                              ? 'bg-gold-100 border-navy-200 text-navy-900'
+                              ? 'bg-slate-800 border-slate-700 text-slate-300'
                               : sub.status === 'checked-in'
-                              ? 'bg-purple-100 border-purple-300 text-purple-900'
+                              ? 'bg-gold-300/10 border-gold-300/20 text-gold-300'
                               : sub.status === 'pending'
-                              ? 'bg-gold-100 border-gold-300 text-gold-900'
-                              : 'bg-rose-100 border-rose-300 text-rose-900'
+                              ? 'bg-slate-800 border-slate-700 text-slate-400'
+                              : 'bg-red-500/10 border-red-500/20 text-red-400'
                           }`}
                         >
                           {sub.status === 'paid' && (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-amber-500" />
                           )}
                           {sub.status.charAt(0).toUpperCase() +
                             sub.status.slice(1)}
@@ -958,20 +931,20 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                       {/* Notes */}
                       <td className="px-5 py-4 align-top max-w-xs">
                         {sub.notes ? (
-                          <div className="text-xs text-navy-900 bg-ivory p-2.5 rounded-xl border border-navy-200 font-medium line-clamp-3">
+                          <div className="text-xs text-slate-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-medium line-clamp-3">
                             {sub.notes}
                           </div>
                         ) : (
-                          <span className="text-xs text-navy-900/50 italic">
+                          <span className="text-xs text-slate-600 italic">
                             No notes attached
                           </span>
                         )}
                       </td>
 
                       {/* Timestamp */}
-                      <td className="px-5 py-4 align-top text-xs text-navy-900/70">
+                      <td className="px-5 py-4 align-top text-xs text-slate-400">
                         <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-navy-900/70" />
+                          <Clock className="w-3 h-3 text-slate-500" />
                           <span>{submittedDate}</span>
                         </div>
                       </td>
@@ -983,7 +956,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                             e.stopPropagation();
                             setDetailSubmissionId(sub.id);
                           }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-navy-200 text-navy-900 hover:bg-gold-100"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                           title="View Full Record"
                         >
                           <Eye className="w-3.5 h-3.5" />

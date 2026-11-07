@@ -79,25 +79,25 @@ export const Pagination: React.FC<PaginationProps> = ({
   const navBtn = (active: boolean, isDisabled: boolean) =>
     `${baseBtn} ${
       isDisabled
-        ? 'opacity-40 cursor-not-allowed bg-white border-navy-200 text-navy-900/40'
+        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-600'
         : active
-        ? 'bg-gold-500 border-gold-600 text-navy-950 hover:bg-gold-600 hover:text-white'
-        : 'bg-white border-navy-200 text-navy-900 hover:bg-gold-100'
+        ? 'bg-amber-500 border-amber-600 text-slate-950 hover:bg-amber-400'
+        : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white'
     }`;
 
   const numberBtn = (active: boolean, isDisabled: boolean) =>
     `${baseBtn} ${
       isDisabled
-        ? 'opacity-40 cursor-not-allowed bg-white border-navy-200 text-navy-900/40'
+        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-600'
         : active
-        ? 'bg-navy-900 border-navy-900 text-white shadow-sm'
-        : 'bg-white border-navy-200 text-navy-900 hover:bg-gold-100'
+        ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm'
+        : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white'
     }`;
 
   if (totalItems === 0) {
     return (
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-white border border-navy-200 rounded-2xl shadow-sm">
-        <span className="text-xs text-navy-900/60">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-sm">
+        <span className="text-xs text-slate-400">
           No {itemLabel} to display.
         </span>
       </div>
@@ -105,21 +105,21 @@ export const Pagination: React.FC<PaginationProps> = ({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 bg-white border border-navy-200 rounded-2xl shadow-sm">
+    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-sm">
       {/* Left: range + page-size selector */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-navy-900/70">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
         <span>
           Showing{' '}
-          <span className="font-bold text-navy-900">
+          <span className="font-bold text-white">
             {firstIndex}–{lastIndex}
           </span>{' '}
-          of <span className="font-bold text-navy-900">{totalItems}</span>{' '}
+          of <span className="font-bold text-white">{totalItems}</span>{' '}
           {itemLabel}
         </span>
 
         {onPageSizeChange && (
           <label className="flex items-center gap-1.5">
-            <span className="text-navy-900/60">Per page</span>
+            <span className="text-slate-500">Per page</span>
             <select
               value={pageSize}
               onChange={e => {
@@ -127,7 +127,7 @@ export const Pagination: React.FC<PaginationProps> = ({
                 onPageChange(1);
               }}
               disabled={disabled}
-              className={`px-2 py-1 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium focus:border-gold-500 focus:outline-none ${
+              className={`px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 text-xs font-medium focus:border-amber-500 focus:outline-none ${
                 disabled ? 'opacity-40 cursor-not-allowed' : ''
               }`}
             >
@@ -168,7 +168,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           ) : (
             <span
               key={`e-${idx}`}
-              className="px-1.5 text-navy-900/40 text-xs font-bold select-none"
+              className="px-1.5 text-slate-600 text-xs font-bold select-none"
             >
               …
             </span>

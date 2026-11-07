@@ -32,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   eventsCount
 }) => {
   return (
-    <header className="sticky top-0 z-50 border-b border-navy-600/20 bg-white/95 backdrop-blur-md shadow-sm">
+    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
 
@@ -51,29 +51,29 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-display font-semibold text-lg tracking-wide text-navy-900">
+                <span className="font-display font-semibold text-lg tracking-wide text-white">
                   MYRRH
                 </span>
 
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gold-100 text-gold-700 border border-gold-300">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gold-300/10 text-gold-300 border border-gold-300/20">
                   REGISTRY
                 </span>
               </div>
 
-              <p className="text-xs text-navy-600">
+              <p className="text-xs text-slate-400">
                 Event Registration System
               </p>
             </div>
           </div>
 
           {/* Center Nav Tabs */}
-          <nav className="hidden md:flex items-center space-x-1 bg-ivory-dark p-1.5 rounded-xl border border-navy-600/20">
+          <nav className="hidden md:flex items-center space-x-1 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveTab('events')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'events'
-                  ? 'bg-navy-900 text-white shadow-md'
-                  : 'text-navy-900/80 hover:text-navy-900 hover:bg-white'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
@@ -84,8 +84,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setActiveTab('templates')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'templates'
-                  ? 'bg-navy-900 text-white shadow-md'
-                  : 'text-navy-900/80 hover:text-navy-900 hover:bg-white'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <LayoutTemplate className="w-3.5 h-3.5" />
@@ -96,8 +96,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setActiveTab('submissions')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'submissions'
-                  ? 'bg-navy-900 text-white shadow-md'
-                  : 'text-navy-900/80 hover:text-navy-900 hover:bg-white'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <Database className="w-3.5 h-3.5" />
@@ -108,8 +108,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setActiveTab('archive')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'archive'
-                  ? 'bg-navy-900 text-white shadow-md'
-                  : 'text-navy-900/80 hover:text-navy-900 hover:bg-white'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <Archive className="w-3.5 h-3.5" />
@@ -128,15 +128,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               }
               className={`hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
                 supabaseConfig.isConnected
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                  : 'bg-navy-100/30 border-navy-600/30 text-navy-900 hover:bg-navy-100/60'
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
               }`}
             >
               <span
                 className={`h-2 w-2 rounded-full ${
                   supabaseConfig.isConnected
-                    ? 'bg-emerald-500 animate-pulse'
-                    : 'bg-navy-600'
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-slate-500'
                 }`}
               />
 
@@ -147,21 +147,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
 
               {supabaseConfig.isConnected && (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-amber-500" />
               )}
             </button>
 
             <button
               onClick={onToggleAIAssistant}
-              className="px-3.5 py-2 text-xs font-bold text-gold-700 bg-gold-50 hover:bg-gold-100 rounded-lg border border-gold-300 transition flex items-center gap-2"
+              className="px-3.5 py-2 text-xs font-bold text-gold-300 bg-gold-300/10 hover:bg-gold-300/20 rounded-lg border border-gold-300/20 transition flex items-center gap-2"
             >
-              <Wand2 className="w-3.5 h-3.5 text-gold-600" />
+              <Wand2 className="w-3.5 h-3.5 text-gold-300" />
               <span className="hidden sm:inline">AI Assistant</span>
             </button>
 
             <button
               onClick={onOpenNewEvent}
-              className="px-4 py-2 text-xs font-bold text-white bg-navy-900 hover:bg-navy-950 rounded-lg shadow-md transition flex items-center gap-2"
+              className="px-4 py-2 text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg shadow-md shadow-amber-500/20 transition flex items-center gap-2"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
               <span>Create Event</span>

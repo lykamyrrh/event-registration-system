@@ -83,15 +83,13 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 }) => {
   const [activeView, setActiveView] = useState<'editor' | 'preview'>('editor');
 
-  // Unpublished editor changes stay on this device, never in Supabase.
-  // sessionStorage keeps drafts alive within the same browser tab/session
-  // and auto-clears when the browser is closed.
   const draftKey = `myrrh_form_draft_${initialEvent?.id || 'new'}`;
   const [restoredDraft] = useState<any>(() => {
     try { const raw = sessionStorage.getItem(draftKey); return raw ? JSON.parse(raw) : null; }
     catch { return null; }
   });
   const [draftStatus, setDraftStatus] = useState('Local draft');
+  
   // Form Metadata State
   const [title, setTitle] = useState(restoredDraft?.title ?? (initialEvent?.title || 'AYOS YOUTH CAMP 2026'));
   const [slug, setSlug] = useState(restoredDraft?.slug ?? (initialEvent?.slug || 'ayos-youth-camp-2026'));
@@ -275,25 +273,25 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-fadeIn overflow-hidden">
-      <div className="relative w-full max-w-5xl h-[92vh] flex flex-col rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden font-sans">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn overflow-hidden font-sans">
+      <div className="relative w-full max-w-5xl h-[92vh] flex flex-col rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden text-slate-100">
         
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-slate-900 text-white shadow-sm">
-              <SlidersHorizontal className="w-5 h-5 text-amber-400" />
+            <div className="p-2.5 rounded-xl bg-slate-800 text-amber-500 shadow-sm border border-slate-700">
+              <SlidersHorizontal className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   Form Builder & Field Injector
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
                   SUPABASE READY
                 </span>
               </div>
-              <h2 className="text-xl font-extrabold text-slate-900 font-display">
+              <h2 className="text-xl font-extrabold text-white font-display">
                 {initialEvent?.id ? 'Edit Registration Site' : 'Create Registration Site'}
               </h2>
             </div>
@@ -301,13 +299,13 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 
           {/* View Mode Toggle & Close */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center p-1 rounded-xl bg-slate-200/80 border border-slate-300/60">
+            <div className="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800">
               <button
                 onClick={() => setActiveView('editor')}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   activeView === 'editor'
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -317,8 +315,8 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                 onClick={() => setActiveView('preview')}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   activeView === 'preview'
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
@@ -328,7 +326,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700 transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -336,40 +334,40 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-8">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-900 space-y-8">
           {activeView === 'editor' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
               {/* Left Column: Metadata & Links */}
               <div className="lg:col-span-5 space-y-6">
-                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-                  <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
-                    <Tag className="w-4 h-4 text-slate-600" />
+                <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 shadow-sm space-y-4">
+                  <h3 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <Tag className="w-4 h-4 text-amber-500" />
                     Event Metadata
                   </h3>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                      Event Title <span className="text-rose-500">*</span>
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
+                      Event Title <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => handleTitleChange(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-semibold placeholder-slate-400 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition shadow-sm"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white font-semibold placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-sm"
                       placeholder="e.g. AYOS YOUTH CAMP 2026"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                      <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
                         Category
                       </label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value as EventCategory)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-slate-800 transition shadow-sm"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white font-semibold focus:outline-none focus:border-amber-500 transition shadow-sm"
                       >
                         <option value="camp">Youth Camp </option>
                         <option value="general">General Event </option>
@@ -379,13 +377,13 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                      <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
                         Form Type
                       </label>
                       <select
                         value={type}
                         onChange={(e) => setType(e.target.value as EventType)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-slate-800 transition shadow-sm"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white font-semibold focus:outline-none focus:border-amber-500 transition shadow-sm"
                       >
                         <option value="pre-registration">Two-Part Pre-Registration</option>
                         <option value="registration">Standard Registration</option>
@@ -394,48 +392,48 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
                       Event Date & Location
                     </label>
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-300 shadow-sm">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 shadow-sm">
                         <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
                         <input
                           type="date"
                           value={eventDate}
                           onChange={(e) => setEventDate(e.target.value)}
-                          className="bg-transparent border-none text-slate-800 text-xs font-semibold focus:outline-none w-full"
+                          className="bg-transparent border-none text-white text-xs font-semibold focus:outline-none w-full [color-scheme:dark]"
                         />
                       </div>
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-300 shadow-sm">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 shadow-sm">
                         <MapPin className="w-4 h-4 text-slate-500 shrink-0" />
                         <input
                           type="text"
                           value={location}
                           onChange={(e) => setLocation(e.target.value)}
                           placeholder="e.g. Mount Zion Camp Grounds"
-                          className="bg-transparent border-none text-slate-800 text-xs font-medium focus:outline-none w-full"
+                          className="bg-transparent border-none text-white text-xs font-medium focus:outline-none w-full placeholder-slate-600"
                         />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
                       Description / Banner Overview
                     </label>
                     <textarea
                       rows={3}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-800 font-medium placeholder-slate-400 focus:outline-none focus:border-slate-800 transition shadow-sm"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white font-medium placeholder-slate-600 focus:outline-none focus:border-amber-500 transition shadow-sm"
                     />
                   </div>
 
                   {/* Insert Link Feature */}
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <Link2 className="w-3.5 h-3.5 text-amber-600" />
+                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5 text-amber-500" />
                       Insert External Link / Guidelines URL
                     </label>
                     <div className="space-y-2">
@@ -444,39 +442,39 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                         value={externalLinkLabel}
                         onChange={(e) => setExternalLinkLabel(e.target.value)}
                         placeholder="Link Label (e.g. Camp Guidelines & GCash QR)"
-                        className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:border-slate-800 focus:outline-none font-medium shadow-sm"
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none font-medium shadow-sm placeholder-slate-600"
                       />
                       <input
                         type="url"
                         value={externalLinkUrl}
                         onChange={(e) => setExternalLinkUrl(e.target.value)}
                         placeholder="https://example.com/camp-payment-info"
-                        className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:border-slate-800 focus:outline-none font-mono shadow-sm"
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none font-mono shadow-sm placeholder-slate-600"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
                       Submit Button Label
                     </label>
                     <input
                       type="text"
                       value={submitButtonText}
                       onChange={(e) => setSubmitButtonText(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-slate-800 shadow-sm"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white font-semibold focus:outline-none focus:border-amber-500 shadow-sm"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">
                       Success Confirmation Message
                     </label>
                     <textarea
                       rows={2}
                       value={successMessage}
                       onChange={(e) => setSuccessMessage(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-800 font-medium focus:outline-none focus:border-slate-800 shadow-sm"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white font-medium focus:outline-none focus:border-amber-500 shadow-sm"
                     />
                   </div>
                 </div>
@@ -486,14 +484,14 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
               <div className="lg:col-span-7 space-y-6">
                 
                 {/* CUSTOMIZABLE FIELD INJECTOR SYSTEM */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div>
-                      <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                        <Syringe className="w-4 h-4 text-amber-600" />
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Syringe className="w-4 h-4 text-amber-500" />
                         Customizable Field Injector
                       </span>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-[11px] text-slate-400 mt-0.5">
                         Select a pre-configured pack or create custom re-usable field packs.
                       </p>
                     </div>
@@ -501,9 +499,9 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsCreatingPack(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-sm transition"
                     >
-                      <PackagePlus className="w-3.5 h-3.5 text-amber-400" />
+                      <PackagePlus className="w-3.5 h-3.5 text-slate-950" />
                       + Create Custom Pack
                     </button>
                   </div>
@@ -513,20 +511,20 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                     {customPacks.map((pack) => (
                       <div
                         key={pack.id}
-                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-400 transition-all flex flex-col justify-between group"
+                        className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-600 transition-all flex flex-col justify-between group"
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex items-center gap-2">
-                            <div className="p-2 rounded-lg bg-white border border-slate-200 text-slate-800 shadow-xs">
-                              {pack.iconName === 'Building2' && <Building2 className="w-4 h-4 text-slate-700" />}
-                              {pack.iconName === 'DollarSign' && <DollarSign className="w-4 h-4 text-amber-600" />}
-                              {pack.iconName === 'HeartPulse' && <HeartPulse className="w-4 h-4 text-rose-500" />}
-                              {pack.iconName === 'Shirt' && <Shirt className="w-4 h-4 text-emerald-600" />}
-                              {pack.iconName === 'Sparkles' && <Sparkles className="w-4 h-4 text-purple-600" />}
+                            <div className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 shadow-xs">
+                              {pack.iconName === 'Building2' && <Building2 className="w-4 h-4 text-slate-300" />}
+                              {pack.iconName === 'DollarSign' && <DollarSign className="w-4 h-4 text-amber-500" />}
+                              {pack.iconName === 'HeartPulse' && <HeartPulse className="w-4 h-4 text-red-400" />}
+                              {pack.iconName === 'Shirt' && <Shirt className="w-4 h-4 text-gold-300" />}
+                              {pack.iconName === 'Sparkles' && <Sparkles className="w-4 h-4 text-gold-300" />}
                             </div>
                             <div>
-                              <div className="font-bold text-xs text-slate-900">{pack.name}</div>
-                              <div className="text-[10px] text-slate-500 line-clamp-1">{pack.description}</div>
+                              <div className="font-bold text-xs text-white">{pack.name}</div>
+                              <div className="text-[10px] text-slate-400 line-clamp-1">{pack.description}</div>
                             </div>
                           </div>
 
@@ -534,7 +532,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleDeletePack(pack.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1 rounded transition"
+                              className="text-slate-500 hover:text-red-400 p-1 rounded transition"
                               title="Delete custom pack"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -542,16 +540,16 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           )}
                         </div>
 
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-800">
                           <span className="text-[10px] font-bold text-slate-500 uppercase">
                             {pack.fields.length} {pack.fields.length === 1 ? 'Field' : 'Fields'}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleInjectPack(pack)}
-                            className="px-2.5 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-700 text-[11px] font-extrabold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                            className="px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 hover:bg-amber-500 hover:text-slate-950 hover:border-amber-500 text-slate-300 text-[11px] font-extrabold transition flex items-center gap-1 shadow-xs cursor-pointer"
                           >
-                            <Plus className="w-3 h-3 text-amber-500" />
+                            <Plus className="w-3 h-3 text-amber-500 group-hover:text-slate-950" />
                             Inject Fields
                           </button>
                         </div>
@@ -561,16 +559,16 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 
                   {/* Create New Pack Inline Builder */}
                   {isCreatingPack && (
-                    <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 space-y-3 animate-fadeIn">
+                    <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/30 space-y-3 animate-fadeIn">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                          <FolderPlus className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <FolderPlus className="w-4 h-4 text-amber-500" />
                           New Custom Injector Pack Builder
                         </span>
                         <button
                           type="button"
                           onClick={() => setIsCreatingPack(false)}
-                          className="text-slate-400 hover:text-slate-700"
+                          className="text-slate-500 hover:text-white"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -582,19 +580,19 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           value={newPackName}
                           onChange={(e) => setNewPackName(e.target.value)}
                           placeholder="Pack Name (e.g. Medical & Health Consent)"
-                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 font-semibold focus:outline-none focus:border-slate-800"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white font-semibold focus:outline-none focus:border-amber-500 placeholder-slate-600"
                         />
                         <input
                           type="text"
                           value={newPackDesc}
                           onChange={(e) => setNewPackDesc(e.target.value)}
                           placeholder="Short description..."
-                          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 font-medium focus:outline-none focus:border-slate-800"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white font-medium focus:outline-none focus:border-amber-500 placeholder-slate-600"
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <span className="text-[11px] font-bold text-slate-600 uppercase">Pack Fields:</span>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Pack Fields:</span>
                         {newPackFields.map((f, idx) => (
                           <div key={idx} className="flex flex-wrap items-center gap-2">
                             <input
@@ -606,7 +604,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                                 setNewPackFields(updated);
                               }}
                               placeholder="Field Name / Label"
-                              className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 font-medium"
+                              className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white font-medium placeholder-slate-600 focus:border-amber-500 focus:outline-none"
                             />
                             <select
                               value={f.type || 'text'}
@@ -615,7 +613,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                                 updated[idx].type = e.target.value as FieldType;
                                 setNewPackFields(updated);
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 font-medium"
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white font-medium focus:border-amber-500 focus:outline-none"
                             >
                               <option value="text">Text</option>
                               <option value="textarea">Textarea</option>
@@ -631,7 +629,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                                 updated[idx].section = e.target.value as 'part1' | 'part2';
                                 setNewPackFields(updated);
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 font-medium"
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white font-medium focus:border-amber-500 focus:outline-none"
                             >
                               <option value="part1">Part 1 (Church)</option>
                               <option value="part2">Part 2 (Camper)</option>
@@ -640,7 +638,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                               type="button"
                               onClick={() => setNewPackFields(newPackFields.filter((_, i) => i !== idx))}
                               disabled={newPackFields.length <= 1}
-                              className="p-1.5 text-rose-500 hover:text-rose-700 disabled:opacity-30"
+                              className="p-1.5 text-red-400 hover:text-red-300 disabled:opacity-30"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -651,7 +649,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setNewPackFields([...newPackFields, { label: '', type: 'text', required: true, section: 'part1' }])}
-                            className="text-xs font-bold text-slate-800 hover:underline flex items-center gap-1"
+                            className="text-xs font-bold text-white hover:underline flex items-center gap-1"
                           >
                             <Plus className="w-3.5 h-3.5" /> Add Field to Pack
                           </button>
@@ -659,9 +657,9 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           <button
                             type="button"
                             onClick={handleSaveCustomPack}
-                            className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 shadow-sm flex items-center gap-1.5"
+                            className="px-4 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400 shadow-sm flex items-center gap-1.5 transition"
                           >
-                            <Save className="w-3.5 h-3.5 text-amber-400" /> Save Pack
+                            <Save className="w-3.5 h-3.5 text-slate-950" /> Save Pack
                           </button>
                         </div>
                       </div>
@@ -671,38 +669,40 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                 </div>
 
                 {/* Main Form Fields List */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-slate-600" />
+                <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-amber-500" />
                       Active Form Fields ({fields.length})
                     </h3>
                   </div>
 
                   {/* Add Standard Single Field Toolbar */}
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                       Add Single Standard Field:
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" onClick={() => handleAddField('text')} className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-xs">
-                        <Plus className="w-3 h-3 text-amber-600" /> Text
+                      <button type="button" onClick={() => handleAddField('text')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Plus className="w-3 h-3 text-amber-500" /> Text
                       </button>
-                      <button type="button" onClick={() => handleAddField('email')} className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-xs">
-                        <Plus className="w-3 h-3 text-amber-600" /> Email
+                      <button type="button" onClick={() => handleAddField('email')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Plus className="w-3 h-3 text-amber-500" /> Email
                       </button>
-                      <button type="button" onClick={() => handleAddField('select')} className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-xs">
-                        <Plus className="w-3 h-3 text-amber-600" /> Dropdown
+                      <button type="button" onClick={() => handleAddField('select')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Plus className="w-3 h-3 text-amber-500" /> Dropdown
                       </button>
-                      <button type="button" onClick={() => handleAddField('radio')} className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-xs">
-                        <Plus className="w-3 h-3 text-amber-600" /> Radio
+                      <button type="button" onClick={() => handleAddField('radio')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Plus className="w-3 h-3 text-amber-500" /> Radio
                       </button>
-                      <button type="button" onClick={() => handleAddField('link')} className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-amber-300 text-amber-900 text-xs font-semibold flex items-center gap-1 shadow-xs">
-                        <Link2 className="w-3 h-3 text-amber-600" /> URL Link
+                      <button type="button" onClick={() => handleAddField('link')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-amber-500/30 text-amber-500 text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Link2 className="w-3 h-3 text-amber-500" /> URL Link
                       </button>
-                      <button type="button" onClick={() => handleAddField('file')} className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold">+ Image Upload</button>
-                      <button type="button" onClick={() => handleAddField('textarea')} className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-xs">
-                        <Plus className="w-3 h-3 text-amber-600" /> Textarea
+                      <button type="button" onClick={() => handleAddField('file')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Plus className="w-3 h-3 text-amber-500" /> Image Upload
+                      </button>
+                      <button type="button" onClick={() => handleAddField('textarea')} className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition">
+                        <Plus className="w-3 h-3 text-amber-500" /> Textarea
                       </button>
                     </div>
                   </div>
@@ -712,14 +712,14 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                     {fields.map((field, idx) => (
                       <div
                         key={field.id}
-                        className="p-4 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all space-y-3 shadow-xs"
+                        className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all space-y-3 shadow-xs"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
+                            <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold flex items-center justify-center">
                               {idx + 1}
                             </span>
-                            <span className="text-[10px] font-extrabold uppercase text-slate-700 px-2 py-0.5 rounded bg-slate-200 border border-slate-300">
+                            <span className="text-[10px] font-extrabold uppercase text-slate-300 px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
                               {field.type}
                             </span>
                           </div>
@@ -729,7 +729,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                               type="button"
                               onClick={() => handleMoveField(idx, 'up')}
                               disabled={idx === 0}
-                              className="p-1 rounded bg-white border border-slate-200 text-slate-600 hover:text-slate-900 disabled:opacity-30"
+                              className="p-1 rounded bg-slate-950 border border-slate-800 text-slate-400 hover:text-white disabled:opacity-30 transition"
                             >
                               <ArrowUp className="w-3.5 h-3.5" />
                             </button>
@@ -737,14 +737,14 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                               type="button"
                               onClick={() => handleMoveField(idx, 'down')}
                               disabled={idx === fields.length - 1}
-                              className="p-1 rounded bg-white border border-slate-200 text-slate-600 hover:text-slate-900 disabled:opacity-30"
+                              className="p-1 rounded bg-slate-950 border border-slate-800 text-slate-400 hover:text-white disabled:opacity-30 transition"
                             >
                               <ArrowDown className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
                               onClick={() => handleRemoveField(field.id)}
-                              className="p-1 rounded bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 ml-2 transition"
+                              className="p-1 rounded bg-slate-950 border border-slate-800 text-red-400 hover:bg-red-950/30 ml-2 transition"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -754,22 +754,22 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                         {/* Field Renaming & Placeholder */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Field Label</label>
+                            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Field Label</label>
                             <input
                               type="text"
                               value={field.label}
                               onChange={(e) => handleUpdateField(field.id, { label: e.target.value })}
-                              className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-semibold focus:border-slate-800 focus:outline-none shadow-xs"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-semibold focus:border-amber-500 focus:outline-none shadow-xs"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Placeholder Text</label>
+                            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Placeholder Text</label>
                             <input
                               type="text"
                               value={field.placeholder || ''}
                               onChange={(e) => handleUpdateField(field.id, { placeholder: e.target.value })}
-                              className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-medium focus:border-slate-800 focus:outline-none shadow-xs"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-medium focus:border-amber-500 focus:outline-none shadow-xs placeholder-slate-600"
                               placeholder="e.g. Enter value..."
                             />
                           </div>
@@ -778,14 +778,14 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                         {/* Options for Select / Radio */}
                         {(field.type === 'select' || field.type === 'radio') && (
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
                               Choices / Options (comma-separated)
                             </label>
                             <input
                               type="text"
                               value={field.options?.join(', ') || ''}
                               onChange={(e) => handleUpdateField(field.id, { options: e.target.value.split(',').map(s => s.trim()) })}
-                              className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-medium focus:border-slate-800 focus:outline-none shadow-xs"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-medium focus:border-amber-500 focus:outline-none shadow-xs placeholder-slate-600"
                               placeholder="e.g. Option A, Option B, Option C"
                             />
                           </div>
@@ -794,13 +794,13 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                         {/* Section Target & Required Checkbox */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
                               Deploy Section Target
                             </label>
                             <select
                               value={field.section || 'part1'}
                               onChange={(e) => handleUpdateField(field.id, { section: e.target.value as 'part1' | 'part2' })}
-                              className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-semibold focus:border-slate-800 focus:outline-none shadow-xs"
+                              className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-semibold focus:border-amber-500 focus:outline-none shadow-xs"
                             >
                               <option value="part1">Part 1: Church & Delegation Information</option>
                               <option value="part2">Part 2: Camper Roster Listing</option>
@@ -808,12 +808,12 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2 pt-5">
-                            <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
+                            <label className="flex items-center gap-2 text-xs text-slate-300 font-medium cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={field.required}
                                 onChange={(e) => handleUpdateField(field.id, { required: e.target.checked })}
-                                className="rounded border-slate-300 text-slate-900 focus:ring-slate-800"
+                                className="rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
                               />
                               <span>Required Field</span>
                             </label>
@@ -831,15 +831,15 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
           ) : (
             /* Live Form Preview View */
             <div className="max-w-2xl mx-auto py-4">
-              <div className="rounded-3xl bg-white border border-slate-200 p-8 shadow-xl space-y-6 font-sans">
-                <div className="border-b border-slate-200 pb-6">
-                  <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-slate-100 border border-slate-200 text-slate-700 uppercase tracking-wider">
+              <div className="rounded-3xl bg-slate-900 border border-slate-800 p-8 shadow-xl space-y-6 font-sans">
+                <div className="border-b border-slate-800 pb-6">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-slate-800 border border-slate-700 text-slate-300 uppercase tracking-wider">
                     {type}
                   </span>
-                  <h1 className="text-3xl font-extrabold text-slate-900 font-display mt-3 mb-2">
+                  <h1 className="text-3xl font-extrabold text-white font-display mt-3 mb-2">
                     {title}
                   </h1>
-                  <p className="text-slate-600 text-sm leading-relaxed mb-4">
+                  <p className="text-slate-300 text-sm leading-relaxed mb-4">
                     {description}
                   </p>
 
@@ -849,21 +849,21 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                         href={externalLinkUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 text-xs font-bold transition"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 text-xs font-bold transition"
                       >
-                        <Link2 className="w-4 h-4 text-amber-600" />
+                        <Link2 className="w-4 h-4 text-amber-500" />
                         <span>{externalLinkLabel}</span>
                       </a>
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-4 text-xs text-slate-500 font-medium">
+                  <div className="flex flex-wrap gap-4 text-xs text-slate-400 font-medium">
                     <span className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <Calendar className="w-4 h-4 text-slate-500" />
                       {eventDate}
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-slate-400" />
+                      <MapPin className="w-4 h-4 text-slate-500" />
                       {location}
                     </span>
                   </div>
@@ -873,25 +873,25 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                   {fields.map((f) => (
                     <div key={f.id} className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                          {f.label} {f.required && <span className="text-rose-500">*</span>}
+                        <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                          {f.label} {f.required && <span className="text-red-500">*</span>}
                         </label>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase px-2 py-0.5 rounded bg-slate-100">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase px-2 py-0.5 rounded bg-slate-800">
                           {type === 'registration' ? 'Standard Registration' : f.section === 'part2' ? 'Part 2' : 'Part 1'}
                         </span>
                       </div>
 
                       {f.type === 'file' ? (
-                        <input type="file" accept="image/jpeg,image/png,image/webp" disabled className="w-full text-sm" />
+                        <input type="file" accept="image/jpeg,image/png,image/webp" disabled className="w-full text-sm text-slate-400" />
                       ) : f.type === 'textarea' ? (
                         <textarea
                           rows={3}
                           disabled
                           placeholder={f.placeholder || 'Enter response...'}
-                          className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm"
+                          className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-500 text-sm placeholder-slate-600"
                         />
                       ) : f.type === 'select' ? (
-                        <select disabled className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm">
+                        <select disabled className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-500 text-sm">
                           <option>-- Select option --</option>
                           {f.options?.map((o) => (
                             <option key={o}>{o}</option>
@@ -900,8 +900,8 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                       ) : f.type === 'radio' ? (
                         <div className="flex flex-wrap gap-3 pt-1">
                           {f.options?.map((o) => (
-                            <label key={o} className="flex items-center gap-2 text-xs text-slate-700">
-                              <input type="radio" disabled name={f.id} />
+                            <label key={o} className="flex items-center gap-2 text-xs text-slate-400">
+                              <input type="radio" disabled name={f.id} className="bg-slate-950 border-slate-800" />
                               <span>{o}</span>
                             </label>
                           ))}
@@ -911,7 +911,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                           type={f.type === 'link' ? 'url' : f.type}
                           disabled
                           placeholder={f.placeholder || (f.type === 'link' ? 'https://...' : 'Enter response...')}
-                          className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm"
+                          className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-500 text-sm placeholder-slate-600"
                         />
                       )}
                     </div>
@@ -919,7 +919,7 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 
                   <button
                     disabled
-                    className="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold text-sm shadow-md mt-4 cursor-not-allowed opacity-90"
+                    className="w-full py-3.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-sm shadow-md mt-4 cursor-not-allowed opacity-90"
                   >
                     {submitButtonText}
                   </button>
@@ -930,19 +930,22 @@ export const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
-          <div className="flex items-center gap-3"><span className="text-xs text-slate-500">{draftStatus}</span><button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-700 text-sm font-bold hover:bg-slate-100 transition shadow-xs"
-          >
-            Close (Keep Draft)
-          </button></div>
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-950/50">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500">{draftStatus}</span>
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 text-sm font-bold hover:bg-slate-800 transition shadow-xs"
+            >
+              Close (Keep Draft)
+            </button>
+          </div>
 
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md shadow-amber-500/20 transition"
           >
-            <Check className="w-4 h-4 text-amber-400" />
+            <Check className="w-4 h-4 text-slate-950" />
             <span>Publish Site</span>
           </button>
         </div>

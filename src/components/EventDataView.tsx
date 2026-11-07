@@ -158,7 +158,6 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
   const [editStatus, setEditStatus] = useState<SubmissionStatus>('confirmed');
   const [editCampers, setEditCampers] = useState<CamperItem[]>([]);
 
-  // Used to scroll back to the top of the list when the page changes
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
   // ── Filter submissions ────────────────────────────────────
@@ -210,7 +209,6 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
       const top = listTopRef.current.offsetTop - 24;
       window.scrollTo({ top, behavior: 'smooth' });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   // ── Derived stats ─────────────────────────────────────────
@@ -396,26 +394,26 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
   // RENDER
   // ══════════════════════════════════════════════════════════
   return (
-    <div className="space-y-6 animate-fadeIn font-sans text-navy-900">
+    <div className="space-y-6 animate-fadeIn font-sans text-slate-100">
       {/* ── Header banner ────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-6 rounded-2xl bg-white border border-navy-200 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
         <div className="space-y-3">
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-navy-900/70 hover:text-navy-900 transition"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to Events
           </button>
 
           <div>
-            <span className="inline-block px-3 py-1 rounded-full bg-gold-100 border border-navy-200 text-navy-900 text-[10px] font-black uppercase tracking-widest mb-2">
+            <span className="inline-block px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest mb-2">
               Per-Event Data
             </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-navy-900">
+            <h1 className="text-2xl sm:text-3xl font-black text-white">
               {event.title}
             </h1>
-            <div className="flex flex-wrap gap-3 pt-2 text-xs text-navy-900/70">
+            <div className="flex flex-wrap gap-3 pt-2 text-xs text-slate-400">
               {event.eventDate && (
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" />
@@ -434,7 +432,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
 
         <button
           onClick={exportCSV}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gold-500 hover:bg-gold-600 hover:text-white text-navy-950 font-bold text-sm shadow-md transition border border-gold-600/30"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md transition border border-amber-600/30"
         >
           <Download className="w-4 h-4" />
           <span>Export CSV (this event)</span>
@@ -467,38 +465,38 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
       </div>
 
       {/* ── Search ───────────────────────────────────────── */}
-      <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm">
+      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
         <div className="relative">
-          <Search className="w-4 h-4 text-navy-900/60 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search church, pastor, delegation head, or camper name..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-ivory border border-navy-200 text-navy-900 text-sm focus:border-gold-500 focus:outline-none placeholder-navy-900/50"
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-amber-500 focus:outline-none placeholder-slate-600"
           />
         </div>
       </div>
 
       {/* ── Empty states ─────────────────────────────────── */}
       {submissions.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-navy-200 p-12 text-center shadow-sm">
-          <Users className="w-10 h-10 text-navy-900/40 mx-auto mb-3" />
-          <h3 className="text-lg font-black text-navy-900">
+        <div className="rounded-2xl bg-slate-900 border border-slate-800 p-12 text-center shadow-sm">
+          <Users className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <h3 className="text-lg font-black text-white">
             No registrations yet
           </h3>
-          <p className="text-sm text-navy-900/60 mt-1 max-w-md mx-auto">
+          <p className="text-sm text-slate-400 mt-1 max-w-md mx-auto">
             Share the public form link for this event to start collecting
             delegations.
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-navy-200 p-12 text-center shadow-sm">
-          <Search className="w-10 h-10 text-navy-900/40 mx-auto mb-3" />
-          <h3 className="text-lg font-black text-navy-900">
+        <div className="rounded-2xl bg-slate-900 border border-slate-800 p-12 text-center shadow-sm">
+          <Search className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <h3 className="text-lg font-black text-white">
             No matching records
           </h3>
-          <p className="text-sm text-navy-900/60 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             Try a different search term.
           </p>
         </div>
@@ -550,35 +548,35 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
               return (
                 <div
                   key={sub.id}
-                  className="rounded-2xl bg-white border border-navy-200 shadow-sm overflow-hidden"
+                  className="rounded-2xl bg-slate-900 border border-slate-800 shadow-sm overflow-hidden"
                 >
                   {/* ── Card header ─────────────────────────── */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-navy-100 bg-ivory-dark">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-slate-800 bg-slate-950/50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-black text-navy-900 text-base truncate">
+                        <h3 className="font-black text-white text-base truncate">
                           {church}
                         </h3>
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                             sub.status === 'paid'
-                              ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
+                              ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
                               : sub.status === 'checked-in'
-                              ? 'bg-purple-100 border-purple-300 text-purple-900'
+                              ? 'bg-gold-300/10 border-gold-300/20 text-gold-300'
                               : sub.status === 'pending'
-                              ? 'bg-gold-100 border-gold-300 text-gold-900'
+                              ? 'bg-slate-800 border-slate-700 text-slate-400'
                               : sub.status === 'cancelled'
-                              ? 'bg-rose-100 border-rose-300 text-rose-900'
-                              : 'bg-gold-100 border-navy-200 text-navy-900'
+                              ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                              : 'bg-slate-800 border-slate-700 text-slate-300'
                           }`}
                         >
                           {sub.status}
                         </span>
-                        <span className="text-[11px] text-navy-900/60 font-mono">
+                        <span className="text-[11px] text-slate-500 font-mono">
                           Ref #{sub.id.slice(-6)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-navy-900/60">
+                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400">
                         <Clock className="w-3 h-3" />
                         <span>{submittedDate}</span>
                       </div>
@@ -595,8 +593,8 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         }
                         className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
                           sub.status === 'paid'
-                            ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
-                            : 'bg-gold-500 hover:bg-gold-600 hover:text-white text-navy-950 border-gold-600/30 shadow-sm'
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                            : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-600/30 shadow-sm'
                         }`}
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -608,7 +606,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                       {isEditing ? (
                         <button
                           onClick={cancelEdit}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-navy-200 hover:bg-ivory"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white"
                         >
                           <X className="w-3.5 h-3.5" />
                           Cancel
@@ -616,7 +614,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                       ) : (
                         <button
                           onClick={() => beginEdit(sub)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-navy-200 hover:bg-gold-100"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                           Edit
@@ -634,7 +632,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                             onDeleteSubmission(sub.id);
                           }
                         }}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-navy-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-red-400 hover:bg-red-950/30 hover:border-red-900/50 transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         Delete
@@ -645,7 +643,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                   {/* ── Detail row ──────────────────────────── */}
                   {!isEditing && (
                     <>
-                      <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x md:divide-navy-100">
+                      <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x md:divide-slate-800">
                         <DetailBlock
                           icon={<Building2 className="w-3.5 h-3.5" />}
                           title="Church Information"
@@ -666,8 +664,8 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                           />
                           {regCode && (
                             <div className="flex items-center gap-2 mt-1">
-                              <ShieldCheck className="w-3 h-3 text-navy-900/50 shrink-0" />
-                              <span className="font-mono font-black text-gold-700 tracking-wider">
+                              <ShieldCheck className="w-3 h-3 text-slate-500 shrink-0" />
+                              <span className="font-mono font-black text-gold-300 tracking-wider">
                                 {regCode}
                               </span>
                             </div>
@@ -724,18 +722,18 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                       </div>
 
                       {/* ── Camper roster (read-only) ──────── */}
-                      <div className="px-5 py-4 border-t border-navy-100">
+                      <div className="px-5 py-4 border-t border-slate-800">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5" />
                             Camper Roster ({campers.length})
                           </p>
                         </div>
 
-                        <div className="overflow-x-auto rounded-xl border border-navy-200">
+                        <div className="overflow-x-auto rounded-xl border border-slate-800">
                           <table className="w-full text-xs">
-                            <thead className="bg-ivory">
-                              <tr className="text-left text-[10px] uppercase tracking-wider text-navy-900/70">
+                            <thead className="bg-slate-950">
+                              <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                                 <th className="px-3 py-2 font-black">#</th>
                                 <th className="px-3 py-2 font-black">
                                   Full Name
@@ -752,37 +750,30 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-navy-100">
+                            <tbody className="divide-y divide-slate-800">
                               {campers.map((c, i) => (
                                 <tr
                                   key={c.id || i}
-                                  className="hover:bg-gold-50/40"
+                                  className="hover:bg-slate-800/40"
                                 >
-                                  <td className="px-3 py-2 text-navy-900/60 font-mono">
+                                  <td className="px-3 py-2 text-slate-500 font-mono">
                                     {i + 1}
                                   </td>
-                                  <td className="px-3 py-2 font-semibold text-navy-900">
+                                  <td className="px-3 py-2 font-semibold text-white">
                                     {c.fullName || '—'}
                                   </td>
-                                  <td className="px-3 py-2 text-navy-900/80">
+                                  <td className="px-3 py-2 text-slate-300">
                                     {c.badgeName || '—'}
                                   </td>
-                                  <td className="px-3 py-2 text-navy-900/80">
+                                  <td className="px-3 py-2 text-slate-300">
                                     {c.age || '—'}
                                   </td>
-                                  <td className="px-3 py-2 text-navy-900/80 capitalize">
+                                  <td className="px-3 py-2 text-slate-300 capitalize">
                                     {c.gradeLevel || '—'}
                                   </td>
                                   <td className="px-3 py-2">
-                                    <span
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                                        c.gender === 'male'
-                                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                          : c.gender === 'female'
-                                          ? 'bg-pink-50 text-pink-700 border border-pink-200'
-                                          : 'bg-navy-50 text-navy-700 border border-navy-200'
-                                      }`}
-                                    >
+                                    {/* REMOVED HIGHLIGHT/BORDERS HERE */}
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">
                                       {c.gender || '—'}
                                     </span>
                                   </td>
@@ -799,9 +790,9 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                   {isEditing && (
                     <div className="p-5 space-y-5">
                       {/* Status + notes */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-ivory border border-navy-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800">
                         <div>
-                          <label className="block text-xs font-bold text-navy-900 mb-1">
+                          <label className="block text-xs font-bold text-slate-300 mb-1">
                             Registration Status
                           </label>
                           <select
@@ -811,7 +802,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                 e.target.value as SubmissionStatus
                               )
                             }
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-navy-200 text-navy-900 text-sm focus:border-gold-500 focus:outline-none font-bold"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:border-amber-500 focus:outline-none font-bold"
                           >
                             <option value="paid">Paid (Payment Verified)</option>
                             <option value="confirmed">Confirmed</option>
@@ -821,7 +812,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-navy-900 mb-1">
+                          <label className="block text-xs font-bold text-slate-300 mb-1">
                             Organizer Notes
                           </label>
                           <input
@@ -829,14 +820,14 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                             value={editNotes}
                             onChange={e => setEditNotes(e.target.value)}
                             placeholder="e.g. Paid cash at church, GCash ref #..."
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-navy-200 text-navy-900 text-sm focus:border-gold-500 focus:outline-none"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:border-amber-500 focus:outline-none placeholder-slate-600"
                           />
                         </div>
                       </div>
 
                       {/* Delegation fields */}
-                      <div className="p-4 rounded-2xl bg-ivory border border-navy-200 space-y-3">
-                        <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">
+                      <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
                           Delegation Fields
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -845,7 +836,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                               if (key === 'campers') return null;
                               return (
                                 <div key={key} className="space-y-1">
-                                  <label className="block text-[11px] font-bold text-navy-900/70 capitalize">
+                                  <label className="block text-[11px] font-bold text-slate-400 capitalize">
                                     {key
                                       .replace(/^f_/, '')
                                       .replace(/_/g, ' ')}
@@ -863,7 +854,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                         [key]: e.target.value
                                       })
                                     }
-                                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none"
                                   />
                                 </div>
                               );
@@ -873,33 +864,33 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                       </div>
 
                       {/* ── Camper roster editor (TABLE) ──── */}
-                      <div className="p-4 rounded-2xl bg-ivory border border-navy-200 space-y-3">
+                      <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5" />
                             Camper Roster ({editCampers.length})
                           </h4>
                           <button
                             type="button"
                             onClick={addEditCamper}
-                            className="flex items-center gap-1 text-xs text-navy-900 font-bold bg-white px-2.5 py-1 rounded-lg border border-navy-200 hover:bg-gold-100"
+                            className="flex items-center gap-1 text-xs text-white font-bold bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800 transition"
                           >
                             <UserPlus className="w-3.5 h-3.5" /> Add Camper
                           </button>
                         </div>
 
                         {editCampers.length === 0 ? (
-                          <div className="rounded-xl border border-dashed border-navy-200 bg-white p-6 text-center">
-                            <p className="text-xs text-navy-900/50 italic">
+                          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-6 text-center">
+                            <p className="text-xs text-slate-500 italic">
                               No campers yet. Click "Add Camper" to add one.
                             </p>
                           </div>
                         ) : (
-                          <div className="rounded-xl border border-navy-200 bg-white overflow-hidden">
+                          <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden">
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs min-w-[820px]">
-                                <thead className="bg-ivory-dark">
-                                  <tr className="text-left text-[10px] uppercase tracking-wider text-navy-900/70">
+                                <thead className="bg-slate-950">
+                                  <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                                     <th className="px-3 py-2 font-black w-12">
                                       #
                                     </th>
@@ -923,13 +914,13 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                     </th>
                                   </tr>
                                 </thead>
-                                <tbody className="divide-y divide-navy-100">
+                                <tbody className="divide-y divide-slate-800">
                                   {editCampers.map((c, idx) => (
                                     <tr
                                       key={c.id}
-                                      className="hover:bg-gold-50/40"
+                                      className="hover:bg-slate-800/40"
                                     >
-                                      <td className="px-3 py-2 text-navy-900/60 font-mono align-middle">
+                                      <td className="px-3 py-2 text-slate-500 font-mono align-middle">
                                         {idx + 1}
                                       </td>
                                       <td className="px-3 py-2 align-middle">
@@ -944,7 +935,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                               e.target.value
                                             )
                                           }
-                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none placeholder-slate-600"
                                         />
                                       </td>
                                       <td className="px-3 py-2 align-middle">
@@ -959,7 +950,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                               e.target.value
                                             )
                                           }
-                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none placeholder-slate-600"
                                         />
                                       </td>
                                       <td className="px-3 py-2 align-middle">
@@ -976,7 +967,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                               e.target.value
                                             )
                                           }
-                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs focus:border-gold-500 focus:outline-none"
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-amber-500 focus:outline-none placeholder-slate-600"
                                         />
                                       </td>
                                       <td className="px-3 py-2 align-middle">
@@ -989,7 +980,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                               e.target.value
                                             )
                                           }
-                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium focus:border-gold-500 focus:outline-none"
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-medium focus:border-amber-500 focus:outline-none"
                                         >
                                           <option value="elementary">
                                             Elementary
@@ -1018,7 +1009,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                               e.target.value
                                             )
                                           }
-                                          className="w-full px-2.5 py-1.5 rounded-lg bg-ivory border border-navy-200 text-navy-900 text-xs font-medium focus:border-gold-500 focus:outline-none"
+                                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-medium focus:border-amber-500 focus:outline-none"
                                         >
                                           <option value="male">Male</option>
                                           <option value="female">Female</option>
@@ -1029,7 +1020,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                           type="button"
                                           onClick={() => removeEditCamper(c.id)}
                                           title="Remove camper"
-                                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-navy-200 bg-white text-rose-700 hover:bg-rose-50 hover:border-rose-300 transition"
+                                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-700 bg-slate-900 text-red-400 hover:bg-red-950/30 hover:border-red-900/50 transition"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -1047,14 +1038,14 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="px-5 py-2 rounded-xl bg-white border border-navy-200 text-navy-900 font-bold text-sm hover:bg-ivory"
+                          className="px-5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold text-sm hover:bg-slate-800"
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
                           onClick={() => saveEdit(sub.id)}
-                          className="flex items-center gap-2 px-6 py-2 rounded-xl bg-gold-500 hover:bg-gold-600 text-navy-950 font-bold text-sm shadow-md border border-gold-600/30"
+                          className="flex items-center gap-2 px-6 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md border border-amber-600/30"
                         >
                           <Save className="w-4 h-4" />
                           Save Changes
@@ -1095,21 +1086,21 @@ const StatCard: React.FC<{
 }> = ({ icon, label, value, accent = 'default' }) => {
   const isEmerald = accent === 'emerald';
   return (
-    <div className="p-4 rounded-2xl bg-white border border-navy-200 shadow-sm flex items-center gap-3">
+    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex items-center gap-3">
       <div
         className={`p-2.5 rounded-xl ${
           isEmerald
-            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-            : 'bg-gold-100 text-navy-900'
+            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+            : 'bg-slate-800 text-gold-300'
         }`}
       >
         {icon}
       </div>
       <div>
-        <div className="text-xs text-navy-900/70">{label}</div>
+        <div className="text-xs text-slate-400">{label}</div>
         <div
           className={`text-xl font-black ${
-            isEmerald ? 'text-emerald-800' : 'text-navy-900'
+            isEmerald ? 'text-amber-500' : 'text-white'
           }`}
         >
           {value}
@@ -1125,11 +1116,11 @@ const DetailBlock: React.FC<{
   children: React.ReactNode;
 }> = ({ icon, title, children }) => (
   <div className="p-5 space-y-2">
-    <p className="text-[10px] font-black uppercase tracking-widest text-navy-900/60 flex items-center gap-1.5">
+    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
       {icon}
       {title}
     </p>
-    <div className="space-y-1 text-xs text-navy-900/80">{children}</div>
+    <div className="space-y-1 text-xs text-slate-300">{children}</div>
   </div>
 );
 
@@ -1139,10 +1130,10 @@ const DetailLine: React.FC<{
   strong?: boolean;
 }> = ({ icon, label, strong }) => (
   <div className="flex items-start gap-2">
-    <span className="text-navy-900/50 mt-0.5 shrink-0">{icon}</span>
+    <span className="text-slate-500 mt-0.5 shrink-0">{icon}</span>
     <span
       className={
-        strong ? 'font-semibold text-navy-900 break-words' : 'break-words'
+        strong ? 'font-semibold text-white break-words' : 'break-words'
       }
     >
       {label}
