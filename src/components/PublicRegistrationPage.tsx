@@ -14,7 +14,8 @@ import {
   UserPlus,
   Check,
   Copy,
-  ShieldCheck
+  ShieldCheck,
+  Link2
 } from 'lucide-react';
 
 interface PublicRegistrationPageProps {
@@ -26,13 +27,6 @@ interface PublicRegistrationPageProps {
 // Helpers
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Persists camper rows for a submission into the `campers` table.
- *
- * This is part of the registration transaction from the UI's point of view:
- * if the camper rows cannot be saved, the caller treats the submission as
- * failed and removes the registration row that was just created.
- */
 const persistCampersForSubmission = async (
   client: ReturnType<typeof getSupabaseClient>,
   submissionId: string,
@@ -101,9 +95,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
   const [copiedJson, setCopiedJson] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
-  // ── Session-level delegation receipts ────────────────────────────────────
-  // Tracks each submitted delegation in this browser session so we can show
-  // the receipt/QR card on the "Add Delegation" page.
   const [sessionDelegations, setSessionDelegations] = useState<
     Array<{
       submissionReference: string;
@@ -150,16 +141,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         }
       }
 
-      // Supabase is the only source of truth for public events.
-      // Never fall back to a browser-only event: registrations.event_id has a
-      // foreign key to events.id, so a local-only event can never accept a
-      // valid registration.
       setEvent(loadedEvent);
-
-      // Do not restore a church from browser storage.
-      // Returning churches must explicitly verify their Church Registration Code.
-
-
       setIsCheckingRegistration(false);
     };
 
@@ -176,7 +158,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
 
-  // Camper Roster Handlers
   const handleAddCamper = () => {
     setCampers([
       ...campers,
@@ -252,12 +233,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         return;
       }
 
-      // ── Step 1: Try to find the original 'church' registration ──────────
-      // We intentionally do NOT filter by registration_type here because:
-      //  a) Older records may lack that field entirely
-      //  b) The church code itself is already unique per church per event
-      // We order by submitted_at ASC and take the first match so we always
-      // get the original church record (not a later delegation add-on).
       const { data, error } = await client
         .from('registrations')
         .select('id,data')
@@ -301,7 +276,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     }
   };
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -311,7 +285,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
   const submitRegistration = async () => {
 
-    // Client-side validation: Part 1 is only required for the first church registration.
     if (!isAddingDelegation) {
       const part1Fields = isYouthCamp
         ? event.fields.filter(f => f.section === 'part1' || !f.section)
@@ -325,7 +298,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       }
     }
 
-    // Client-side validation: Part 2 Camper Roster
     if (isYouthCamp) {
       for (let i = 0; i < campers.length; i++) {
         const c = campers[i];
@@ -349,8 +321,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
     const client = getSupabaseClient();
 
-    // Supabase is the source of truth. Never show a successful registration
-    // when the browser is not connected to the registration database.
     if (!client) {
       alert(
         'Registration could not be submitted because the registration database is unavailable. Please refresh the page and try again.'
@@ -360,7 +330,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
 
     const subId = `AYOS-2026-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Format Structured Submission JSON Payload
     const payload = {
       event_id: event.id,
       event_title: event.title,
@@ -375,13 +344,15 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         pastor_details: {
           full_name: formData.f_pastor_fullname || '',
           contact_number: formData.f_pastor_contact || '',
-          email_address: formData.f_pastor_email || ''
+          email_address: formData.f_pastor_email || '',
+          facebook_link: formData.f_pastor_facebook || ''
         },
         delegation_head_details: {
           full_name: formData.f_delegation_fullname || '',
           role_position: formData.f_delegation_role || '',
           mobile_number: formData.f_delegation_mobile || '',
-          email_address: formData.f_delegation_email || ''
+          email_address: formData.f_delegation_email || '',
+          facebook_link: formData.f_delegation_facebook || ''
         },
         additional_deployed_fields: formData
       },
@@ -407,8 +378,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       return;
     }
 
-    // Upload receipts before writing the registration. Only private object paths
-    // are saved in the database; never put a public receipt URL in JSON.
     const uploadedReceiptPaths: string[] = [];
     const receiptData: Record<string, string> = {};
     try {
@@ -455,7 +424,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     let insertedRegistrationId: string | null = null;
 
     try {
-      // 1. The registration row MUST exist before the UI can report success.
       const { data: inserted, error: insertError } = await client
         .from('registrations')
         .insert({
@@ -473,8 +441,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
       const savedRegistrationId = inserted.id;
       insertedRegistrationId = savedRegistrationId;
 
-      // 2. Mirror the roster into the dedicated campers table used by the
-      // organizer/admin side. A failure here must not produce a false success.
       if (isYouthCamp && campers.length > 0) {
         try {
           await persistCampersForSubmission(
@@ -484,8 +450,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             campers
           );
         } catch (camperError) {
-          // Best-effort rollback so an incomplete registration is not left
-          // behind when the camper roster could not be persisted.
           const { error: rollbackError } = await client
             .from('registrations')
             .delete()
@@ -499,8 +463,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         }
       }
 
-      // 3. Verify that the church code was actually persisted and is readable
-      // through the same policies used by the returning-church flow.
       const { data: persistedRegistration, error: verifyError } = await client
         .from('registrations')
         .select('id,data')
@@ -516,7 +478,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         );
       }
 
-      // Only now is the registration considered successful.
       setSubmissionId(subId);
       setSubmittedJsonPayload(JSON.stringify(payload, null, 2));
 
@@ -541,8 +502,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
         }
       }
 
-      // Session-only UI history. This is deliberately NOT persisted to
-      // localStorage, so refreshing the browser never authenticates a church.
       setSessionDelegations(prev => [
         ...prev,
         {
@@ -580,7 +539,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     setTimeout(() => setCodeCopied(false), 2000);
   };
 
-  // Separate standard vs custom deployed fields
   const standardPart1FieldIds = [
     'f_church_name',
     'f_church_address',
@@ -588,18 +546,18 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
     'f_pastor_fullname',
     'f_pastor_contact',
     'f_pastor_email',
+    'f_pastor_facebook',
     'f_delegation_fullname',
     'f_delegation_role',
     'f_delegation_mobile',
-    'f_delegation_email'
+    'f_delegation_email',
+    'f_delegation_facebook'
   ];
 
   const customPart1Fields = event.fields.filter(
     f => (!isYouthCamp || f.section === 'part1' || !f.section) && !standardPart1FieldIds.includes(f.id)
   );
-  // Exclude the 5 built-in camper roster fields — they are already rendered
-  // as the structured camper cards above. Only truly custom part2 fields
-  // (added by the admin via injector packs) should appear here.
+  
   const BUILTIN_CAMPER_FIELD_IDS = [
     'f_camper_full_name', 'f_preferred_badge_name', 'f_age',
     'f_academic_level', 'f_gender'
@@ -691,7 +649,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
               )}
             </div>
 
-            {/* ── Receipt cards for delegations submitted in this session ── */}
             {sessionDelegations.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -770,7 +727,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
           <div className="rounded-3xl bg-slate-900/90 border border-amber-500/40 p-6 sm:p-10 shadow-2xl space-y-8 relative overflow-hidden">
             <div className="absolute top-0 right-0 -mt-10 -mr-10 w-48 h-48 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
 
-            {/* Cross-device Church Registration Code Access */}
             {!isReturningChurch && !isAddingDelegation && (
               <div className="p-6 rounded-2xl bg-slate-950 border border-amber-500/30 space-y-4">
                 <div className="flex items-start gap-3">
@@ -817,7 +773,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
               </div>
             )}
 
-            {/* Event Banner Header */}
             <div className="border-b border-slate-800 pb-8 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400 uppercase tracking-wider">
@@ -841,7 +796,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 {event.description}
               </p>
 
-              {/* Banner Guidelines Link */}
               {(event as any).externalLink && (event as any).externalLink.url && (
                 <div className="pt-2">
                   <a
@@ -874,7 +828,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
               </div>
             </div>
 
-            {/* Dynamic 2-Part Form */}
             <form onSubmit={handleSubmit} className="space-y-10">
               {!isAddingDelegation && (
                 <>
@@ -950,7 +903,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                       <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
                         2. Pastor Details
                       </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-semibold text-slate-200 mb-1">
                             Full Name <span className="text-amber-400">*</span>
@@ -966,6 +919,21 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-slate-200 mb-1">
+                            Email Address <span className="text-amber-400">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="pastor@gmail.com"
+                            value={formData['f_pastor_email'] || ''}
+                            onChange={e => handleInputChange('f_pastor_email', e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                        
+                        {/* Contact & Facebook Side-by-Side */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-200 mb-1">
                             Contact Number <span className="text-amber-400">*</span>
                           </label>
                           <input
@@ -978,15 +946,16 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-200 mb-1">
-                            Email Address <span className="text-amber-400">*</span>
+                          <label className="block text-xs font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+                            <Link2 className="w-3.5 h-3.5 text-amber-500" />
+                            Facebook Profile Link <span className="text-amber-400">*</span>
                           </label>
                           <input
-                            type="email"
+                            type="url"
                             required
-                            placeholder="pastor@gmail.com"
-                            value={formData['f_pastor_email'] || ''}
-                            onChange={e => handleInputChange('f_pastor_email', e.target.value)}
+                            placeholder="https://facebook.com/..."
+                            value={formData['f_pastor_facebook'] || ''}
+                            onChange={e => handleInputChange('f_pastor_facebook', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                           />
                         </div>
@@ -1012,7 +981,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                           />
                         </div>
-
                         <div>
                           <label className="block text-xs font-semibold text-slate-200 mb-1">
                             Role / Position <span className="text-amber-400">*</span>
@@ -1026,7 +994,21 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                           />
                         </div>
-
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-200 mb-1">
+                            Email Address <span className="text-amber-400">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="delegation.head@gmail.com"
+                            value={formData['f_delegation_email'] || ''}
+                            onChange={e => handleInputChange('f_delegation_email', e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                        
+                        {/* Mobile & Facebook Side-by-Side */}
                         <div>
                           <label className="block text-xs font-semibold text-slate-200 mb-1">
                             Mobile Number <span className="text-amber-400">*</span>
@@ -1040,17 +1022,17 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                           />
                         </div>
-
                         <div>
-                          <label className="block text-xs font-semibold text-slate-200 mb-1">
-                            Email Address <span className="text-amber-400">*</span>
+                          <label className="block text-xs font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+                            <Link2 className="w-3.5 h-3.5 text-amber-500" />
+                            Facebook Profile Link <span className="text-amber-400">*</span>
                           </label>
                           <input
-                            type="email"
+                            type="url"
                             required
-                            placeholder="delegation.head@gmail.com"
-                            value={formData['f_delegation_email'] || ''}
-                            onChange={e => handleInputChange('f_delegation_email', e.target.value)}
+                            placeholder="https://facebook.com/..."
+                            value={formData['f_delegation_facebook'] || ''}
+                            onChange={e => handleInputChange('f_delegation_facebook', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                           />
                         </div>
@@ -1118,6 +1100,7 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                         </div>
                       </div>
                     )}
+
                   </div>
                 </>
               )}
@@ -1139,7 +1122,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                     </div>
                   </div>
 
-                  {/* AUTOMATED TOTAL CAMPER COUNTER DISPLAY */}
                   <div className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold text-xs shadow-md flex items-center gap-1.5">
                     <span>Total Campers:</span>
                     <span className="text-sm">{campers.length}</span>
@@ -1151,7 +1133,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                   Preferred Badge Name, Age, Grade Level, and Gender.
                 </p>
 
-                {/* Camper Dynamic List Cards */}
                 <div className="space-y-5">
                   {campers.map((camper, index) => (
                     <div
@@ -1239,7 +1220,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                           </select>
                         </div>
 
-                        {/* Interactive Working Male / Female Radio Buttons */}
                         <div>
                           <label className="block text-xs font-semibold text-slate-300 mb-1">
                             Gender <span className="text-amber-400">*</span>
@@ -1336,7 +1316,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             </form>
           </div>
         ) : (
-          /* Confirmation Ticket Card & Structured JSON Payload Viewer */
           <div className="rounded-3xl bg-slate-900 border border-amber-500/50 p-8 sm:p-10 text-center shadow-2xl space-y-6 relative overflow-hidden animate-fadeIn">
             <div className="w-16 h-16 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
               <CheckCircle2 className="w-10 h-10" />
@@ -1351,7 +1330,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
             </p>
 
             <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 max-w-xl mx-auto text-left space-y-4">
-              {/* Reference Code Row */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <span className="text-xs text-slate-400">Reference Code</span>
                 <div className="flex items-center gap-2">
@@ -1367,10 +1345,8 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 </div>
               </div>
 
-              {/* Church Registration Code — HIGHLIGHTED & COPYABLE */}
               {!isAddingDelegation && churchRegistrationCode && (
                 <div className="relative p-5 rounded-2xl bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-amber-500/5 border-2 border-amber-400/60 space-y-3 shadow-lg shadow-amber-500/20 animate-pulse-slow">
-                  {/* Attention badge */}
                   <div className="flex items-center gap-2">
                     <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-400 text-slate-950 text-xs font-black animate-bounce">
                       !
@@ -1435,7 +1411,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
                 </div>
               )}
 
-              {/* Total Campers Row */}
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <span className="text-xs text-slate-400">Total Registered Campers</span>
                 <span className="text-xs font-bold text-emerald-400">
@@ -1444,7 +1419,6 @@ export const PublicRegistrationPage: React.FC<PublicRegistrationPageProps> = ({
               </div>
             </div>
 
-            {/* ── Registration Receipt with QR Code ──────────────────── */}
             <div className="pt-2">
               <RegistrationReceiptCard
                 eventId={eventId}
