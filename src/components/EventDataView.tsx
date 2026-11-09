@@ -5,6 +5,7 @@ import {
   SubmissionStatus,
   CamperItem
 } from '../types';
+import * as XLSX from 'xlsx';
 import { getSupabaseClient } from '../lib/supabase';
 import { Pagination } from './Pagination';
 import {
@@ -28,6 +29,65 @@ import {
   Users,
   X
 } from 'lucide-react';
+
+// ═══════════════════════════════════════════════════════════════
+// Excel export helpers
+// ═══════════════════════════════════════════════════════════════
+
+// Keys that already have dedicated columns (or are internal) so they
+// are NOT repeated as raw "f_xxx" columns in the export.
+const EXPORT_HIDDEN_KEYS = new Set([
+  'campers',
+  'church_registration_code',
+  'registration_type',
+  'parent_registration_id',
+  'f_church_name',
+  'f_company',
+  'f_church_address',
+  'f_city_province',
+  'f_church_pastor',
+  'f_pastor_fullname',
+  'f_pastor_contact',
+  'f_pastor_email',
+  'f_delegation_head_name',
+  'f_delegation_fullname',
+  'f_name',
+  'f_delegation_role',
+  'f_delegation_head_phone',
+  'f_delegation_mobile',
+  'f_phone',
+  'f_delegation_email',
+  'f_church_registration_code'
+]);
+
+// f_pastor_email -> "Pastor Email"
+const prettyKey = (k: string) =>
+  k
+    .replace(/^f_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+
+// Plain values for the sheet. Strings stay strings, so phone numbers
+// keep their leading zeros.
+const cellValue = (val: unknown): string | number =>
+  val == null
+    ? ''
+    : Array.isArray(val)
+    ? val.join('; ')
+    : typeof val === 'object'
+    ? JSON.stringify(val)
+    : typeof val === 'number'
+    ? val
+    : String(val);
+
+// 2026-11-09 14:30 (sortable, no locale surprises)
+const fmtDate = (d: string | number | Date) => {
+  const x = new Date(d);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} ${p(
+    x.getHours()
+  )}:${p(x.getMinutes())}`;
+};
 
 // ═══════════════════════════════════════════════════════════════
 // Local camper resolver
@@ -160,28 +220,48 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
 
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
-  // ── Filter submissions ────────────────────────────────────
-  const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return submissions;
+  // ── Group submissions by church code ──────────────────────
+  const groupedSubmissions = useMemo(() => {
+    const groups: Record<string, RegistrationSubmission[]> = {};
+    
+    // Sort ascending first so the "primary" sub is the oldest (to keep church details stable)
+    const sortedSubs = [...submissions].sort(
+      (a, b) => new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime()
+    );
+
+    sortedSubs.forEach(sub => {
+      const code = sub.data.church_registration_code || sub.data.f_church_name || sub.id;
+      if (!groups[code]) groups[code] = [];
+      groups[code].push(sub);
+    });
+
+    return Object.values(groups).map(group => {
+      const primarySub = group[0];
+      const latestSub = group[group.length - 1];
+      const allCampers = group.flatMap(sub => resolveCampers(sub));
+      
+      return {
+        id: primarySub.id,
+        churchCode: String(primarySub.data.church_registration_code || primarySub.data.f_church_name || primarySub.id),
+        primarySub,
+        submissions: group,
+        allCampers,
+        latestDate: new Date(latestSub.submitted_at).getTime()
+      };
+    }).sort((a, b) => b.latestDate - a.latestDate); // Newest church at top
+  }, [submissions]);
+
+  // ── Filter groups ─────────────────────────────────────────
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery.trim()) return groupedSubmissions;
     const q = searchQuery.toLowerCase();
 
-    return submissions.filter(sub => {
-      const church = String(
-        sub.data.f_church_name || sub.data.f_company || ''
-      ).toLowerCase();
-      const pastor = String(
-        sub.data.f_church_pastor || sub.data.f_pastor_fullname || ''
-      ).toLowerCase();
-      const leader = String(
-        sub.data.f_delegation_head_name ||
-          sub.data.f_delegation_fullname ||
-          sub.data.f_name ||
-          ''
-      ).toLowerCase();
-      const campersText = resolveCampers(sub)
-        .map(c => `${c.fullName} ${c.badgeName}`)
-        .join(' ')
-        .toLowerCase();
+    return groupedSubmissions.filter(group => {
+      const sub = group.primarySub;
+      const church = String(sub.data.f_church_name || sub.data.f_company || '').toLowerCase();
+      const pastor = String(sub.data.f_church_pastor || sub.data.f_pastor_fullname || '').toLowerCase();
+      const leader = String(sub.data.f_delegation_head_name || sub.data.f_delegation_fullname || sub.data.f_name || '').toLowerCase();
+      const campersText = group.allCampers.map(c => `${c.fullName} ${c.badgeName}`).join(' ').toLowerCase();
 
       return (
         church.includes(q) ||
@@ -190,7 +270,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
         campersText.includes(q)
       );
     });
-  }, [submissions, searchQuery]);
+  }, [groupedSubmissions, searchQuery]);
 
   // ── Reset to page 1 when filters change ───────────────────
   useEffect(() => {
@@ -198,10 +278,10 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
   }, [searchQuery, pageSize]);
 
   // ── Paginated slice ───────────────────────────────────────
-  const paginated = useMemo(() => {
+  const paginatedGroups = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return filteredGroups.slice(start, start + pageSize);
+  }, [filteredGroups, page, pageSize]);
 
   // ── Scroll-to-top when page changes ───────────────────────
   useEffect(() => {
@@ -213,21 +293,16 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
 
   // ── Derived stats ─────────────────────────────────────────
   const totalCampers = useMemo(
-    () => submissions.reduce((acc, s) => acc + resolveCampers(s).length, 0),
-    [submissions]
+    () => groupedSubmissions.reduce((acc, g) => acc + g.allCampers.length, 0),
+    [groupedSubmissions]
   );
   const totalPaid = useMemo(
-    () => submissions.filter(s => s.status === 'paid').length,
-    [submissions]
+    () => groupedSubmissions.filter(g => g.submissions.some(s => s.status === 'paid')).length,
+    [groupedSubmissions]
   );
   const uniqueChurches = useMemo(
-    () =>
-      new Set(
-        submissions.map(s =>
-          String(s.data.f_church_name || s.data.f_company || '')
-        )
-      ).size,
-    [submissions]
+    () => groupedSubmissions.length,
+    [groupedSubmissions]
   );
 
   // ── Edit handlers ─────────────────────────────────────────
@@ -293,21 +368,23 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
     setEditingRowId(null);
   };
 
-  // ── CSV export (this event only, entire filtered set) ─────
-  const exportCSV = () => {
-    if (filtered.length === 0) {
+  // ── Excel export (this event only, entire filtered set) ───
+  const exportXLSX = () => {
+    if (filteredGroups.length === 0) {
       alert('No records to export.');
       return;
     }
 
-    const dataKeys = Array.from(
-      new Set(filtered.flatMap(s => Object.keys(s.data)))
-    );
+    // Only custom fields not already shown as dedicated columns
+    const extraKeys = Array.from(
+      new Set(filteredGroups.flatMap(g => Object.keys(g.primarySub.data)))
+    ).filter(k => !EXPORT_HIDDEN_KEYS.has(k));
 
     const headers = [
-      'Submission ID',
       'Church Name',
       'Registration Code',
+      'Church Address',
+      'City/Province',
       'Pastor',
       'Pastor Contact',
       'Pastor Email',
@@ -315,79 +392,98 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
       'Delegation Role',
       'Delegation Mobile',
       'Delegation Email',
-      'Status',
-      'Notes',
-      'Submitted At',
+      'Total Campers',
+      'Total Batches',
+      'Batch #',
+      'Batch Status',
+      'Batch Notes',
+      'Batch Submitted',
       'Camper #',
-      'Camper Full Name',
-      'Camper Badge',
-      'Camper Age',
-      'Camper Grade Level',
-      'Camper Gender',
-      ...dataKeys
+      'Full Name',
+      'Badge Name',
+      'Age',
+      'Grade Level',
+      'Gender',
+      ...extraKeys.map(prettyKey)
     ];
 
-    const csvRows = [headers.join(',')];
+    const rows: (string | number)[][] = [];
 
-    filtered.forEach(sub => {
-      const campers = resolveCampers(sub);
-      const shared = [
-        `"${sub.id}"`,
-        `"${String(sub.data.f_church_name || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.church_registration_code || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_pastor_fullname || sub.data.f_church_pastor || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_pastor_contact || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_pastor_email || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_delegation_fullname || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_delegation_role || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_delegation_mobile || '').replace(/"/g, '""')}"`,
-        `"${String(sub.data.f_delegation_email || '').replace(/"/g, '""')}"`,
-        `"${sub.status}"`,
-        `"${(sub.notes || '').replace(/"/g, '""')}"`,
-        `"${new Date(sub.submitted_at).toLocaleString()}"`
-      ];
+    filteredGroups.forEach(group => {
+      const d = group.primarySub.data as Record<string, any>;
 
-      campers.forEach((c, idx) => {
-        const camperCells = [
-          `"${idx + 1}"`,
-          `"${(c.fullName || '').replace(/"/g, '""')}"`,
-          `"${(c.badgeName || '').replace(/"/g, '""')}"`,
-          `"${(c.age || '').replace(/"/g, '""')}"`,
-          `"${(c.gradeLevel || '').replace(/"/g, '""')}"`,
-          `"${(c.gender || '').replace(/"/g, '""')}"`
-        ];
+      const churchCols = [
+        d.f_church_name || d.f_company,
+        d.church_registration_code || d.f_church_registration_code,
+        d.f_church_address,
+        d.f_city_province,
+        d.f_pastor_fullname || d.f_church_pastor,
+        d.f_pastor_contact,
+        d.f_pastor_email,
+        d.f_delegation_fullname || d.f_delegation_head_name || d.f_name,
+        d.f_delegation_role,
+        d.f_delegation_mobile || d.f_delegation_head_phone || d.f_phone,
+        d.f_delegation_email,
+        group.allCampers.length,
+        group.submissions.length
+      ].map(cellValue);
+      const extraCols = extraKeys.map(k => cellValue(d[k]));
 
-        const extras = dataKeys.map(key => {
-          const val = sub.data[key];
-          const str = Array.isArray(val) ? val.join('; ') : String(val ?? '');
-          return `"${str.replace(/"/g, '""')}"`;
+      let camperNo = 0;
+      group.submissions.forEach((sub, batchIdx) => {
+        const batchCols = [
+          batchIdx + 1,
+          sub.status,
+          sub.notes,
+          fmtDate(sub.submitted_at)
+        ].map(cellValue);
+
+        const campers = resolveCampers(sub);
+
+        if (campers.length === 0) {
+          rows.push([...churchCols, ...batchCols, '', '', '', '', '', '', ...extraCols]);
+          return;
+        }
+
+        campers.forEach(c => {
+          camperNo += 1;
+          rows.push([
+            ...churchCols,
+            ...batchCols,
+            camperNo,
+            cellValue(c.fullName),
+            cellValue(c.badgeName),
+            cellValue(c.age),
+            cellValue(c.gradeLevel),
+            cellValue(c.gender),
+            ...extraCols
+          ]);
         });
-
-        csvRows.push([...shared, ...camperCells, ...extras].join(','));
       });
-
-      if (campers.length === 0) {
-        const emptyCamper = ['""', '""', '""', '""', '""', '""'];
-        const extras = dataKeys.map(() => '""');
-        csvRows.push([...shared, ...emptyCamper, ...extras].join(','));
-      }
     });
 
-    const blob = new Blob([csvRows.join('\n')], {
-      type: 'text/csv;charset=utf-8;'
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Auto-fit column widths (capped so long notes don't create a huge column)
+    ws['!cols'] = headers.map((h, i) => {
+      const longest = rows.reduce(
+        (max, r) => Math.max(max, String(r[i] ?? '').length),
+        h.length
+      );
+      return { wch: Math.min(Math.max(longest + 2, 10), 50) };
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute(
-      'download',
+
+    // Filter dropdowns on the header row
+    ws['!autofilter'] = { ref: ws['!ref']! };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Roster');
+    XLSX.writeFile(
+      wb,
       `${event.slug || 'event'}-roster-${new Date()
         .toISOString()
-        .slice(0, 10)}.csv`
+        .slice(0, 10)}.xlsx`
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // ══════════════════════════════════════════════════════════
@@ -431,11 +527,11 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
         </div>
 
         <button
-          onClick={exportCSV}
+          onClick={exportXLSX}
           className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md transition border border-amber-600/30"
         >
           <Download className="w-4 h-4" />
-          <span>Export CSV (this event)</span>
+          <span>Export Excel (this event)</span>
         </button>
       </div>
 
@@ -449,7 +545,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
         <StatCard
           icon={<Users className="w-5 h-5" />}
           label="Delegations"
-          value={submissions.length}
+          value={submissions.length} // Counts individual batches
         />
         <StatCard
           icon={<GraduationCap className="w-5 h-5" />}
@@ -490,7 +586,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
             delegations.
           </p>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filteredGroups.length === 0 ? (
         <div className="rounded-2xl bg-slate-900 border border-slate-800 p-12 text-center shadow-sm">
           <Search className="w-10 h-10 text-slate-600 mx-auto mb-3" />
           <h3 className="text-lg font-black text-white">
@@ -506,8 +602,10 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
           <div ref={listTopRef} />
 
           <div className="space-y-6">
-            {paginated.map(sub => {
-              const campers = resolveCampers(sub);
+            {paginatedGroups.map(group => {
+              const sub = group.primarySub;
+              const latestSub = group.submissions[group.submissions.length - 1];
+              
               const church = String(
                 sub.data.f_church_name ||
                   sub.data.f_company ||
@@ -532,7 +630,8 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
               const regCode = String(
                 sub.data.church_registration_code || ''
               );
-              const submittedDate = new Date(sub.submitted_at).toLocaleString(
+              
+              const submittedDate = new Date(latestSub.submitted_at).toLocaleString(
                 [],
                 {
                   month: 'short',
@@ -547,7 +646,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
 
               return (
                 <div
-                  key={sub.id}
+                  key={group.id}
                   className="rounded-2xl bg-slate-900 border border-slate-800 shadow-sm overflow-hidden"
                 >
                   {/* ── Card header ─────────────────────────── */}
@@ -559,22 +658,27 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         </h3>
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                            sub.status === 'paid'
+                            latestSub.status === 'paid'
                               ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
-                              : sub.status === 'checked-in'
+                              : latestSub.status === 'checked-in'
                               ? 'bg-gold-300/10 border-gold-300/20 text-gold-300'
-                              : sub.status === 'pending'
+                              : latestSub.status === 'pending'
                               ? 'bg-slate-800 border-slate-700 text-slate-400'
-                              : sub.status === 'cancelled'
+                              : latestSub.status === 'cancelled'
                               ? 'bg-red-500/10 border-red-500/20 text-red-400'
                               : 'bg-slate-800 border-slate-700 text-slate-300'
                           }`}
                         >
-                          {sub.status}
+                          {latestSub.status}
                         </span>
                         <span className="text-[11px] text-slate-500 font-mono">
                           Ref #{sub.id.slice(-6)}
                         </span>
+                        {group.submissions.length > 1 && (
+                          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px] font-bold border border-amber-500/20">
+                            {group.submissions.length} Batches
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400">
                         <Clock className="w-3 h-3" />
@@ -582,24 +686,24 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Actions */}
+                    {/* Actions - these edit/delete the LATEST batch */}
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() =>
                           onUpdateSubmissionStatus(
-                            sub.id,
-                            sub.status === 'paid' ? 'confirmed' : 'paid'
+                            latestSub.id,
+                            latestSub.status === 'paid' ? 'confirmed' : 'paid'
                           )
                         }
                         className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
-                          sub.status === 'paid'
+                          latestSub.status === 'paid'
                             ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
                             : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-600/30 shadow-sm'
                         }`}
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>
-                          {sub.status === 'paid' ? 'Paid' : 'Confirm Pay'}
+                          {latestSub.status === 'paid' ? 'Paid' : 'Confirm Pay'}
                         </span>
                       </button>
 
@@ -613,11 +717,11 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         </button>
                       ) : (
                         <button
-                          onClick={() => beginEdit(sub)}
+                          onClick={() => beginEdit(latestSub)} // Edit latest batch
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                          Edit
+                          Edit Latest
                         </button>
                       )}
 
@@ -625,17 +729,17 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         onClick={() => {
                           if (
                             confirm(
-                              `Delete this delegation?\n\nChurch: ${church}\nCampers: ${campers.length}\n\nThis also removes all camper rows and cannot be undone.`
+                              `Delete this batch?\n\nChurch: ${church}\nCampers in this batch: ${resolveCampers(latestSub).length}\n\nThis also removes these camper rows.`
                             )
                           ) {
                             if (isEditing) cancelEdit();
-                            onDeleteSubmission(sub.id);
+                            onDeleteSubmission(latestSub.id);
                           }
                         }}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-red-400 hover:bg-red-950/30 hover:border-red-900/50 transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        Delete
+                        Delete Latest
                       </button>
                     </div>
                   </div>
@@ -726,7 +830,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5" />
-                            Camper Roster ({campers.length})
+                            Total Combined Roster ({group.allCampers.length})
                           </p>
                         </div>
 
@@ -751,7 +855,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800">
-                              {campers.map((c, i) => (
+                              {group.allCampers.map((c, i) => (
                                 <tr
                                   key={c.id || i}
                                   className="hover:bg-slate-800/40"
@@ -771,11 +875,8 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                                   <td className="px-3 py-2 text-slate-300 capitalize">
                                     {c.gradeLevel || '—'}
                                   </td>
-                                  <td className="px-3 py-2">
-                                    {/* REMOVED HIGHLIGHT/BORDERS HERE */}
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">
-                                      {c.gender || '—'}
-                                    </span>
+                                  <td className="px-3 py-2 text-slate-300 uppercase">
+                                    {c.gender || '—'}
                                   </td>
                                 </tr>
                               ))}
@@ -786,9 +887,13 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                     </>
                   )}
 
-                  {/* ── Inline editor ─────────────────────── */}
+                  {/* ── Inline editor (Edits the LATEST batch) ─────────────────────── */}
                   {isEditing && (
                     <div className="p-5 space-y-5">
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 mb-2">
+                        You are editing the most recent batch (Ref #{latestSub.id.slice(-6)}) for this church.
+                      </div>
+
                       {/* Status + notes */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800">
                         <div>
@@ -868,7 +973,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                         <div className="flex items-center justify-between">
                           <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5" />
-                            Camper Roster ({editCampers.length})
+                            Batch Roster ({editCampers.length})
                           </h4>
                           <button
                             type="button"
@@ -1048,7 +1153,7 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
                           className="flex items-center gap-2 px-6 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md border border-amber-600/30"
                         >
                           <Save className="w-4 h-4" />
-                          Save Changes
+                          Save Changes to Latest Batch
                         </button>
                       </div>
                     </div>
@@ -1060,13 +1165,13 @@ export const EventDataView: React.FC<EventDataViewProps> = ({
 
           {/* ── Pagination ────────────────────────────────── */}
           <Pagination
-            totalItems={filtered.length}
+            totalItems={filteredGroups.length}
             currentPage={page}
             pageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             disabled={editingRowId !== null}
-            itemLabel="delegations"
+            itemLabel="churches"
             pageSizeOptions={[10, 25, 50, 100]}
           />
         </>

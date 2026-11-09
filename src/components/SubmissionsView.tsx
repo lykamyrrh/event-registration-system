@@ -26,6 +26,7 @@ import {
   MapPin,
   ShieldCheck
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 // ═══════════════════════════════════════════════════════════════
 // PROPS
@@ -35,6 +36,65 @@ interface SubmissionsViewProps {
   submissions: RegistrationSubmission[];
   selectedEventId?: string;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// EXCEL EXPORT HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+// Keys that already have dedicated columns (or are internal) so they
+// are NOT repeated as raw "f_xxx" columns in the export.
+const EXPORT_HIDDEN_KEYS = new Set([
+  'campers',
+  'church_registration_code',
+  'registration_type',
+  'parent_registration_id',
+  'f_church_name',
+  'f_company',
+  'f_church_address',
+  'f_city_province',
+  'f_church_pastor',
+  'f_pastor_fullname',
+  'f_pastor_contact',
+  'f_pastor_email',
+  'f_delegation_head_name',
+  'f_delegation_fullname',
+  'f_name',
+  'f_delegation_role',
+  'f_delegation_head_phone',
+  'f_delegation_mobile',
+  'f_phone',
+  'f_delegation_email',
+  'f_church_registration_code'
+]);
+
+// f_pastor_email -> "Pastor Email"
+const prettyKey = (k: string) =>
+  k
+    .replace(/^f_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+
+// Plain values for the sheet. Strings stay strings, so phone numbers
+// keep their leading zeros.
+const cellValue = (val: unknown): string | number =>
+  val == null
+    ? ''
+    : Array.isArray(val)
+    ? val.join('; ')
+    : typeof val === 'object'
+    ? JSON.stringify(val)
+    : typeof val === 'number'
+    ? val
+    : String(val);
+
+// 2026-11-09 14:30 (sortable, no locale surprises)
+const fmtDate = (d: string | number | Date) => {
+  const x = new Date(d);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} ${p(
+    x.getHours()
+  )}:${p(x.getMinutes())}`;
+};
 
 // ═══════════════════════════════════════════════════════════════
 // SHARED HELPERS
@@ -90,37 +150,42 @@ export const getCampersForSubmission = (
 // DETAIL MODAL (read-only)
 // ═══════════════════════════════════════════════════════════════
 interface DetailModalProps {
-  submission: RegistrationSubmission;
+  submissions: RegistrationSubmission[];
   event?: RegistrationEvent;
   onClose: () => void;
 }
 
 const SubmissionDetailModal: React.FC<DetailModalProps> = ({
-  submission: sub,
+  submissions,
   event,
   onClose
 }) => {
-  const campers = getCampersForSubmission(sub);
+  // Use the first submission to get the primary church info
+  const primarySub = submissions[0];
+
+  // Combine all campers from all batches
+  const campers = submissions.flatMap(sub => getCampersForSubmission(sub));
 
   const church = String(
-    sub.data.f_church_name || sub.data.f_company || 'Independent Church'
+    primarySub.data.f_church_name || primarySub.data.f_company || 'Independent Church'
   );
   const pastor = String(
-    sub.data.f_church_pastor || sub.data.f_pastor_fullname || ''
+    primarySub.data.f_church_pastor || primarySub.data.f_pastor_fullname || ''
   );
   const leader = String(
-    sub.data.f_delegation_head_name ||
-      sub.data.f_delegation_fullname ||
-      sub.data.f_name ||
+    primarySub.data.f_delegation_head_name ||
+      primarySub.data.f_delegation_fullname ||
+      primarySub.data.f_name ||
       'Delegation Head'
   );
   const leaderPhone = String(
-    sub.data.f_delegation_head_phone ||
-      sub.data.f_delegation_mobile ||
-      sub.data.f_phone ||
+    primarySub.data.f_delegation_head_phone ||
+      primarySub.data.f_delegation_mobile ||
+      primarySub.data.f_phone ||
       ''
   );
 
+  // Extract custom fields from the primary submission
   const known = new Set([
     'f_church_name',
     'f_church_address',
@@ -140,7 +205,7 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
     'registration_type',
     'parent_registration_id'
   ]);
-  const extras = Object.entries(sub.data).filter(([k]) => !known.has(k));
+  const extras = Object.entries(primarySub.data).filter(([k]) => !known.has(k));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -166,7 +231,7 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
               Delegation Details
             </h2>
             <p className="text-xs text-slate-400">
-              Ref #{sub.id.slice(-6)} · Event: {event?.title || 'Unknown'}
+              Ref #{primarySub.id.slice(-6)} · Event: {event?.title || 'Unknown'}
             </p>
           </div>
           <button
@@ -197,17 +262,17 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                   <div className="flex items-start gap-2">
                     <MapPin className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
                     <span>
-                      {String(sub.data.f_church_address || '—')}
-                      {sub.data.f_city_province
-                        ? `, ${sub.data.f_city_province}`
+                      {String(primarySub.data.f_church_address || '—')}
+                      {primarySub.data.f_city_province
+                        ? `, ${primarySub.data.f_city_province}`
                         : ''}
                     </span>
                   </div>
-                  {sub.data.f_church_registration_code && (
+                  {primarySub.data.f_church_registration_code && (
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span className="font-mono font-bold text-gold-300">
-                        {String(sub.data.f_church_registration_code)}
+                        {String(primarySub.data.f_church_registration_code)}
                       </span>
                     </div>
                   )}
@@ -227,17 +292,17 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                       {pastor || '—'}
                     </span>
                   </div>
-                  {sub.data.f_pastor_contact && (
+                  {primarySub.data.f_pastor_contact && (
                     <div className="flex items-center gap-2">
                       <Phone className="w-3 h-3 text-slate-500 shrink-0" />
-                      <span>{String(sub.data.f_pastor_contact)}</span>
+                      <span>{String(primarySub.data.f_pastor_contact)}</span>
                     </div>
                   )}
-                  {sub.data.f_pastor_email && (
+                  {primarySub.data.f_pastor_email && (
                     <div className="flex items-center gap-2">
                       <Mail className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">
-                        {String(sub.data.f_pastor_email)}
+                        {String(primarySub.data.f_pastor_email)}
                       </span>
                     </div>
                   )}
@@ -255,10 +320,10 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                     <User className="w-3 h-3 text-slate-500 shrink-0" />
                     <span className="font-semibold text-white">
                       {leader}
-                      {sub.data.f_delegation_role && (
+                      {primarySub.data.f_delegation_role && (
                         <span className="text-slate-400 font-normal">
                           {' '}
-                          ({String(sub.data.f_delegation_role)})
+                          ({String(primarySub.data.f_delegation_role)})
                         </span>
                       )}
                     </span>
@@ -269,11 +334,11 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
                       <span>{leaderPhone}</span>
                     </div>
                   )}
-                  {sub.data.f_delegation_email && (
+                  {primarySub.data.f_delegation_email && (
                     <div className="flex items-center gap-2">
                       <Mail className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">
-                        {String(sub.data.f_delegation_email)}
+                        {String(primarySub.data.f_delegation_email)}
                       </span>
                     </div>
                   )}
@@ -323,7 +388,7 @@ const SubmissionDetailModal: React.FC<DetailModalProps> = ({
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
-                Camper Roster ({campers.length})
+                Total Camper Roster ({campers.length})
               </p>
             </div>
             <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -400,12 +465,44 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [detailSubmissionId, setDetailSubmissionId] = useState<string | null>(null);
+  const [detailChurchCode, setDetailChurchCode] = useState<string | null>(null);
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
-  const detailSubmission = useMemo(
-    () => submissions.find(s => s.id === detailSubmissionId) || null,
-    [submissions, detailSubmissionId]
+  // Group submissions by church code
+  const groupedSubmissions = useMemo(() => {
+    const groups: Record<string, RegistrationSubmission[]> = {};
+
+    // Sort submissions by date ascending first so the "primary" sub is the oldest
+    const sortedSubs = [...submissions].sort(
+      (a, b) => new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime()
+    );
+
+    sortedSubs.forEach(sub => {
+      const code = sub.data.church_registration_code || sub.data.f_church_name || sub.id;
+      if (!groups[code]) groups[code] = [];
+      groups[code].push(sub);
+    });
+
+    // Convert to array, calculate latest update, and sort by latest update (newest first)
+    return Object.values(groups).map(group => {
+      const primarySub = group[0];
+      const latestSub = group[group.length - 1];
+      const allCampers = group.flatMap(sub => getCampersForSubmission(sub));
+
+      return {
+        id: primarySub.id, // Primary ID for keys
+        churchCode: String(primarySub.data.church_registration_code || primarySub.data.f_church_name || primarySub.id),
+        primarySub,
+        submissions: group,
+        allCampers,
+        latestDate: new Date(latestSub.submitted_at).getTime()
+      };
+    }).sort((a, b) => b.latestDate - a.latestDate); // Newest church at top
+  }, [submissions]);
+
+  const detailSubmissions = useMemo(
+    () => groupedSubmissions.find(g => g.churchCode === detailChurchCode)?.submissions || [],
+    [groupedSubmissions, detailChurchCode]
   );
 
   const availableChurches = useMemo(
@@ -420,11 +517,15 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     [submissions]
   );
 
-  const filteredSubmissions = useMemo(() => {
-    return submissions.filter(sub => {
+  const filteredGroups = useMemo(() => {
+    return groupedSubmissions.filter(group => {
+      const sub = group.primarySub;
+
       if (selectedEventId !== 'all' && sub.eventId !== selectedEventId)
         return false;
-      if (statusFilter !== 'all' && sub.status !== statusFilter) return false;
+
+      // Status filter applies if ANY submission in the group matches
+      if (statusFilter !== 'all' && !group.submissions.some(s => s.status === statusFilter)) return false;
 
       if (churchFilter !== 'all') {
         const subChurch = String(
@@ -437,7 +538,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
         const subRole = String(
           sub.data.f_attendee_role || sub.data.f_role || ''
         ).toLowerCase();
-        const camperRoles = getCampersForSubmission(sub)
+        const camperRoles = group.allCampers
           .map(() => 'camper')
           .join(' ');
         const combined = `${subRole} ${camperRoles}`;
@@ -458,7 +559,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
       if (academicFilter !== 'all') {
         const subLevel = String(sub.data.f_academic_level || '');
-        const camperLevels = getCampersForSubmission(sub)
+        const camperLevels = group.allCampers
           .map(c => c.gradeLevel)
           .join(' ');
         const combined = `${subLevel} ${camperLevels}`;
@@ -471,24 +572,23 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           .map(v => (Array.isArray(v) ? v.join(' ') : String(v)))
           .join(' ')
           .toLowerCase();
-        const campersText = getCampersForSubmission(sub)
+        const campersText = group.allCampers
           .map(c => `${c.fullName} ${c.badgeName} ${c.gradeLevel}`)
           .join(' ')
           .toLowerCase();
         const notesText = (sub.notes || '').toLowerCase();
-        const statusText = sub.status.toLowerCase();
+
         return (
           dataValues.includes(query) ||
           campersText.includes(query) ||
-          notesText.includes(query) ||
-          statusText.includes(query)
+          notesText.includes(query)
         );
       }
 
       return true;
     });
   }, [
-    submissions,
+    groupedSubmissions,
     selectedEventId,
     statusFilter,
     churchFilter,
@@ -509,10 +609,10 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
     pageSize
   ]);
 
-  const paginated = useMemo(() => {
+  const paginatedGroups = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filteredSubmissions.slice(start, start + pageSize);
-  }, [filteredSubmissions, page, pageSize]);
+    return filteredGroups.slice(start, start + pageSize);
+  }, [filteredGroups, page, pageSize]);
 
   useEffect(() => {
     if (listTopRef.current) {
@@ -523,94 +623,134 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
   const getEvent = (eventId: string) => events.find(e => e.id === eventId);
 
-  const totalCampersInView = filteredSubmissions.reduce(
-    (acc, sub) => acc + getCampersForSubmission(sub).length,
+  const totalCampersInView = filteredGroups.reduce(
+    (acc, group) => acc + group.allCampers.length,
     0
   );
 
-  const totalPaidCount = filteredSubmissions.filter(
-    s => s.status === 'paid'
+  const totalPaidCount = filteredGroups.filter(
+    group => group.submissions.some(s => s.status === 'paid')
   ).length;
 
-  const handleExportCSV = () => {
-    if (filteredSubmissions.length === 0) {
+  // ═══════════════════════════════════════════════════════════════
+  // EXCEL EXPORT
+  // ═══════════════════════════════════════════════════════════════
+  const handleExportXLSX = () => {
+    if (filteredGroups.length === 0) {
       alert('No records available to export.');
       return;
     }
 
-    const dataKeys = Array.from(
-      new Set(filteredSubmissions.flatMap(s => Object.keys(s.data)))
-    );
+    // Only custom fields not already shown as dedicated columns
+    const extraKeys = Array.from(
+      new Set(filteredGroups.flatMap(g => Object.keys(g.primarySub.data)))
+    ).filter(k => !EXPORT_HIDDEN_KEYS.has(k));
 
     const headers = [
-      'Submission ID',
-      'Event Title',
+      'Event',
       'Church Name',
-      'Church Registration Code',
+      'Registration Code',
+      'Church Address',
+      'City/Province',
+      'Pastor',
+      'Pastor Contact',
+      'Pastor Email',
       'Delegation Head',
-      'Camper Roster Summary',
-      'Status',
-      'Notes',
-      'Submitted At',
-      ...dataKeys
+      'Delegation Role',
+      'Delegation Mobile',
+      'Delegation Email',
+      'Total Campers',
+      'Total Batches',
+      'Batch #',
+      'Batch Status',
+      'Batch Notes',
+      'Batch Submitted',
+      'Camper #',
+      'Full Name',
+      'Badge Name',
+      'Age',
+      'Grade Level',
+      'Gender',
+      ...extraKeys.map(prettyKey)
     ];
 
-    const csvRows = [
-      headers.join(','),
-      ...filteredSubmissions.map(s => {
-        const ev = getEvent(s.eventId);
-        const church = String(
-          s.data.f_church_name || s.data.f_company || 'Independent Church'
-        );
-        const regCode = String(s.data.church_registration_code || '');
-        const head = String(
-          s.data.f_delegation_head_name ||
-            s.data.f_delegation_fullname ||
-            s.data.f_name ||
-            'Leader'
-        );
-        const roster = getCampersForSubmission(s)
-          .map(
-            c =>
-              `${c.fullName} (${c.badgeName}, Age ${c.age}, ${c.gradeLevel}, ${c.gender})`
-          )
-          .join('; ');
+    const rows: (string | number)[][] = [];
 
-        const row = [
-          `"${s.id}"`,
-          `"${ev?.title.replace(/"/g, '""') || 'Unknown Event'}"`,
-          `"${church.replace(/"/g, '""')}"`,
-          `"${regCode.replace(/"/g, '""')}"`,
-          `"${head.replace(/"/g, '""')}"`,
-          `"${roster.replace(/"/g, '""')}"`,
-          `"${s.status}"`,
-          `"${(s.notes || '').replace(/"/g, '""')}"`,
-          `"${new Date(s.submitted_at).toLocaleString()}"`,
-          ...dataKeys.map(key => {
-            const val = s.data[key];
-            const strVal = Array.isArray(val)
-              ? val.join('; ')
-              : String(val ?? '');
-            return `"${strVal.replace(/"/g, '""')}"`;
-          })
-        ];
-        return row.join(',');
-      })
-    ];
+    filteredGroups.forEach(group => {
+      const d = group.primarySub.data as Record<string, any>;
+      const ev = getEvent(group.primarySub.eventId);
 
-    const blob = new Blob([csvRows.join('\n')], {
-      type: 'text/csv;charset=utf-8;'
+      const churchCols = [
+        ev?.title || 'Unknown Event',
+        d.f_church_name || d.f_company,
+        d.church_registration_code || d.f_church_registration_code,
+        d.f_church_address,
+        d.f_city_province,
+        d.f_pastor_fullname || d.f_church_pastor,
+        d.f_pastor_contact,
+        d.f_pastor_email,
+        d.f_delegation_fullname || d.f_delegation_head_name || d.f_name,
+        d.f_delegation_role,
+        d.f_delegation_mobile || d.f_delegation_head_phone || d.f_phone,
+        d.f_delegation_email,
+        group.allCampers.length,
+        group.submissions.length
+      ].map(cellValue);
+      const extraCols = extraKeys.map(k => cellValue(d[k]));
+
+      let camperNo = 0;
+      group.submissions.forEach((sub, batchIdx) => {
+        const batchCols = [
+          batchIdx + 1,
+          sub.status,
+          sub.notes,
+          fmtDate(sub.submitted_at)
+        ].map(cellValue);
+
+        const campers = getCampersForSubmission(sub);
+
+        if (campers.length === 0) {
+          rows.push([...churchCols, ...batchCols, '', '', '', '', '', '', ...extraCols]);
+          return;
+        }
+
+        campers.forEach(c => {
+          camperNo += 1;
+          rows.push([
+            ...churchCols,
+            ...batchCols,
+            camperNo,
+            cellValue(c.fullName),
+            cellValue(c.badgeName),
+            cellValue(c.age),
+            cellValue(c.gradeLevel),
+            cellValue(c.gender),
+            ...extraCols
+          ]);
+        });
+      });
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute(
-      'download',
-      `registrations-export-${new Date().toISOString().slice(0, 10)}.csv`
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Auto-fit column widths (capped so long notes don't create a huge column)
+    ws['!cols'] = headers.map((h, i) => {
+      const longest = rows.reduce(
+        (max, r) => Math.max(max, String(r[i] ?? '').length),
+        h.length
+      );
+      return { wch: Math.min(Math.max(longest + 2, 10), 50) };
+    });
+
+    // Filter dropdowns on the header row
+    ws['!autofilter'] = { ref: ws['!ref']! };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Registrations');
+    XLSX.writeFile(
+      wb,
+      `registrations-${new Date().toISOString().slice(0, 10)}.xlsx`
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -633,11 +773,11 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
         </div>
 
         <button
-          onClick={handleExportCSV}
+          onClick={handleExportXLSX}
           className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md transition border border-amber-600/30"
         >
           <Download className="w-4 h-4" />
-          <span>Export Unified CSV</span>
+          <span>Export Excel (.xlsx)</span>
         </button>
       </div>
 
@@ -674,7 +814,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
           <div>
             <div className="text-xs text-slate-400">Total Delegations</div>
             <div className="text-xl font-black text-white">
-              {filteredSubmissions.length}
+              {filteredGroups.length}
             </div>
           </div>
         </div>
@@ -818,7 +958,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
             </thead>
 
             <tbody className="divide-y divide-slate-800">
-              {paginated.length === 0 ? (
+              {paginatedGroups.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -830,7 +970,10 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                paginated.map(sub => {
+                paginatedGroups.map(group => {
+                  const sub = group.primarySub;
+                  const latestSub = group.submissions[group.submissions.length - 1];
+
                   const ev = getEvent(sub.eventId);
                   const church = String(
                     sub.data.f_church_name ||
@@ -855,10 +998,8 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                       ''
                   );
 
-                  const campersList = getCampersForSubmission(sub);
-
                   const submittedDate = new Date(
-                    sub.submitted_at
+                    latestSub.submitted_at
                   ).toLocaleString([], {
                     month: 'short',
                     day: 'numeric',
@@ -868,8 +1009,8 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
 
                   return (
                     <tr
-                      key={sub.id}
-                      onClick={() => setDetailSubmissionId(sub.id)}
+                      key={group.id}
+                      onClick={() => setDetailChurchCode(group.churchCode)}
                       className="cursor-pointer hover:bg-slate-800/50 transition-colors"
                     >
                       {/* Church & Delegation */}
@@ -896,9 +1037,14 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                       <td className="px-5 py-4 align-top">
                         <div className="space-y-2 max-w-md">
                           <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-amber-500">
-                            {campersList.length} Camper
-                            {campersList.length !== 1 ? 's' : ''}
+                            {group.allCampers.length} Total Camper
+                            {group.allCampers.length !== 1 ? 's' : ''}
                           </span>
+                          {group.submissions.length > 1 && (
+                            <div className="text-[11px] font-semibold text-gold-300">
+                              ({group.submissions.length} Batches)
+                            </div>
+                          )}
                           <div className="text-[11px] text-slate-500 italic">
                             Click row to view full roster
                           </div>
@@ -909,30 +1055,30 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                       <td className="px-5 py-4 align-top">
                         <span
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                            sub.status === 'paid'
+                            latestSub.status === 'paid'
                               ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 shadow-sm'
-                              : sub.status === 'confirmed'
+                              : latestSub.status === 'confirmed'
                               ? 'bg-slate-800 border-slate-700 text-slate-300'
-                              : sub.status === 'checked-in'
+                              : latestSub.status === 'checked-in'
                               ? 'bg-gold-300/10 border-gold-300/20 text-gold-300'
-                              : sub.status === 'pending'
+                              : latestSub.status === 'pending'
                               ? 'bg-slate-800 border-slate-700 text-slate-400'
                               : 'bg-red-500/10 border-red-500/20 text-red-400'
                           }`}
                         >
-                          {sub.status === 'paid' && (
+                          {latestSub.status === 'paid' && (
                             <CheckCircle2 className="w-3.5 h-3.5 text-amber-500" />
                           )}
-                          {sub.status.charAt(0).toUpperCase() +
-                            sub.status.slice(1)}
+                          {latestSub.status.charAt(0).toUpperCase() +
+                            latestSub.status.slice(1)}
                         </span>
                       </td>
 
                       {/* Notes */}
                       <td className="px-5 py-4 align-top max-w-xs">
-                        {sub.notes ? (
+                        {latestSub.notes ? (
                           <div className="text-xs text-slate-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-medium line-clamp-3">
-                            {sub.notes}
+                            {latestSub.notes}
                           </div>
                         ) : (
                           <span className="text-xs text-slate-600 italic">
@@ -954,7 +1100,7 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
                         <button
                           onClick={e => {
                             e.stopPropagation();
-                            setDetailSubmissionId(sub.id);
+                            setDetailChurchCode(group.churchCode);
                           }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                           title="View Full Record"
@@ -973,24 +1119,24 @@ export const SubmissionsView: React.FC<SubmissionsViewProps> = ({
       </div>
 
       {/* Pagination */}
-      {filteredSubmissions.length > 0 && (
+      {filteredGroups.length > 0 && (
         <Pagination
-          totalItems={filteredSubmissions.length}
+          totalItems={filteredGroups.length}
           currentPage={page}
           pageSize={pageSize}
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
-          itemLabel="submissions"
+          itemLabel="churches"
           pageSizeOptions={[10, 25, 50, 100]}
         />
       )}
 
       {/* ═══ DETAIL MODAL ═══ */}
-      {detailSubmission && (
+      {detailChurchCode && detailSubmissions.length > 0 && (
         <SubmissionDetailModal
-          submission={detailSubmission}
-          event={getEvent(detailSubmission.eventId)}
-          onClose={() => setDetailSubmissionId(null)}
+          submissions={detailSubmissions}
+          event={getEvent(detailSubmissions[0].eventId)}
+          onClose={() => setDetailChurchCode(null)}
         />
       )}
     </div>
