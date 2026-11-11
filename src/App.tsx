@@ -34,8 +34,6 @@ const UUID_RE =
 const PUBLIC_FORM_HASH_RE = /^#\/form\/([a-zA-Z0-9-]+)$/;
 const CAMPER_LIST_HASH_RE = /^#\/campers\/([a-zA-Z0-9-]+)$/;
 
-
-
 const safeRandomUUID = (): string => {
   if (
     typeof crypto !== 'undefined' &&
@@ -76,11 +74,6 @@ const mapCamperRow = (c: any): CamperItem => ({
   gender: c.gender || 'male'
 });
 
-/**
- * Replaces all camper rows for a given submission.
- * Safe to call with an empty array (clears rows).
- * No-ops silently when the Supabase client is unavailable.
- */
 const persistCampers = async (
   client: ReturnType<typeof getSupabaseClient> | null,
   submissionId: string,
@@ -95,10 +88,7 @@ const persistCampers = async (
     .eq('submission_id', submissionId);
 
   if (delErr) {
-    console.warn(
-      'Supabase campers delete error:',
-      delErr
-    );
+    console.warn('Supabase campers delete error:', delErr);
     return;
   }
 
@@ -120,10 +110,7 @@ const persistCampers = async (
     .insert(rows);
 
   if (insErr) {
-    console.warn(
-      'Supabase campers insert error:',
-      insErr
-    );
+    console.warn('Supabase campers insert error:', insErr);
   }
 };
 
@@ -134,17 +121,13 @@ const persistCampers = async (
 export function App() {
   // ── Administrator Authentication ────────────────────────────
 
-  const [isAuthChecking, setIsAuthChecking] =
-    useState(true);
-
-  const [isAuthenticated, setIsAuthenticated] =
-    useState(false);
-
-  const [isAuthorizedAdmin, setIsAuthorizedAdmin] =
-    useState(false);
-
-  const [authError, setAuthError] =
-    useState<string | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthorizedAdmin, setIsAuthorizedAdmin] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  
+  // NEW: Track the current admin's email
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   // ── Main navigation ─────────────────────────────────────────
 
@@ -157,81 +140,25 @@ export function App() {
   >('events');
 
   // ── Persistent State ────────────────────────────────────────
-  //
-  // Supabase is the source of truth for events and submissions.
-  // Do not restore either collection from localStorage because
-  // a browser-only event can produce a public URL whose event_id
-  // does not exist in Supabase.
 
-  const [events, setEvents] =
-    useState<RegistrationEvent[]>([]);
-
-  const [submissions, setSubmissions] =
-    useState<RegistrationSubmission[]>([]);
-
-  const [logs, setLogs] =
-    useState<SystemLog[]>(() => {
-      const saved =
-        localStorage.getItem('aurum_logs');
-
-      return saved
-        ? JSON.parse(saved)
-        : [];
-    });
-
-  const [supabaseConfig, setSupabaseConfig] =
-    useState<SupabaseConfig>(
-      getSavedSupabaseConfig
-    );
+  const [events, setEvents] = useState<RegistrationEvent[]>([]);
+  const [submissions, setSubmissions] = useState<RegistrationSubmission[]>([]);
+  const [logs, setLogs] = useState<SystemLog[]>(() => {
+    const saved = localStorage.getItem('aurum_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getSavedSupabaseConfig);
 
   // ── Modals & Navigation ─────────────────────────────────────
 
-  const [
-    isFormBuilderOpen,
-    setIsFormBuilderOpen
-  ] = useState(false);
-
-  const [
-    editingEvent,
-    setEditingEvent
-  ] = useState<
-    Partial<RegistrationEvent> | undefined
-  >(undefined);
-
-  const [
-    isAIAssistantOpen,
-    setIsAIAssistantOpen
-  ] = useState(false);
-
-  const [
-    publicEventId,
-    setPublicEventId
-  ] = useState<string | null>(null);
-
-  const [
-    selectedSubmissionsEventId
-  ] = useState<string | undefined>(
-    undefined
-  );
-
-  // Camper list route.
-  // The church code is intentionally NOT stored in the URL.
-  // The visitor must enter it again on CamperListPage.
-
-  const [
-    camperListEventId,
-    setCamperListEventId
-  ] = useState<string | null>(null);
-
-  // ── Per-Event Data Page ─────────────────────────────────────
-
-  const [
-    eventDataViewId,
-    setEventDataViewId
-  ] = useState<string | null>(null);
-
+  const [isFormBuilderOpen, setIsFormBuilderOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<Partial<RegistrationEvent> | undefined>(undefined);
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [publicEventId, setPublicEventId] = useState<string | null>(null);
+  const [selectedSubmissionsEventId] = useState<string | undefined>(undefined);
+  const [camperListEventId, setCamperListEventId] = useState<string | null>(null);
+  const [eventDataViewId, setEventDataViewId] = useState<string | null>(null);
   const hasSyncedRef = useRef(false);
-
 
   // ═══════════════════════════════════════════════════════════
   // Administrator authentication + admin_users authorization
@@ -255,6 +182,7 @@ export function App() {
       if (!session?.user) {
         setIsAuthenticated(false);
         setIsAuthorizedAdmin(false);
+        setCurrentUserEmail(null);
         setIsAuthChecking(false);
         return;
       }
@@ -267,14 +195,11 @@ export function App() {
 
       if (!email) {
         await client.auth.signOut();
-
         if (!mounted) return;
-
         setIsAuthenticated(false);
         setIsAuthorizedAdmin(false);
-        setAuthError(
-          'The authenticated account does not have a valid email address.'
-        );
+        setCurrentUserEmail(null);
+        setAuthError('The authenticated account does not have a valid email address.');
         setIsAuthChecking(false);
         return;
       }
@@ -290,100 +215,73 @@ export function App() {
         if (!mounted) return;
 
         if (error) {
-          console.error(
-            'Administrator authorization check failed:',
-            error
-          );
-
+          console.error('Administrator authorization check failed:', error);
           await client.auth.signOut();
-
           if (!mounted) return;
-
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
-          setAuthError(
-            'Administrator authorization could not be verified.'
-          );
+          setCurrentUserEmail(null);
+          setAuthError('Administrator authorization could not be verified.');
           setIsAuthChecking(false);
           return;
         }
 
         if (!admin) {
           await client.auth.signOut();
-
           if (!mounted) return;
-
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
-          setAuthError(
-            'This account is not authorized to access MYRRH Registry.'
-          );
+          setCurrentUserEmail(null);
+          setAuthError('This account is not authorized to access MYRRH Registry.');
           setIsAuthChecking(false);
           return;
         }
 
+        // SUCCESSFUL LOGIN
         setIsAuthenticated(true);
         setIsAuthorizedAdmin(true);
+        setCurrentUserEmail(email); // Set the email
         setAuthError(null);
         setIsAuthChecking(false);
 
-      } catch (error) {
-        console.error(
-          'Administrator authentication failed:',
-          error
-        );
-
-        try {
-          await client.auth.signOut();
-        } catch (signOutError) {
-          console.error(
-            'Sign out after authorization failure failed:',
-            signOutError
+        // Log the login event (wrapped in setTimeout to ensure pushLog state is ready)
+        setTimeout(() => {
+          pushLog(
+            'Admin Login',
+            `Administrator ${email} successfully logged in.`,
+            'success'
           );
-        }
+        }, 100);
 
+      } catch (error) {
+        console.error('Administrator authentication failed:', error);
+        try { await client.auth.signOut(); } catch (e) {}
         if (!mounted) return;
-
         setIsAuthenticated(false);
         setIsAuthorizedAdmin(false);
-        setAuthError(
-          'Administrator authorization could not be verified.'
-        );
+        setCurrentUserEmail(null);
+        setAuthError('Administrator authorization could not be verified.');
         setIsAuthChecking(false);
       }
     };
 
     const checkSession = async () => {
       try {
-        const {
-          data: { session },
-          error
-        } = await client.auth.getSession();
-
+        const { data: { session }, error } = await client.auth.getSession();
         if (!mounted) return;
-
         if (error) {
-          console.error(
-            'Supabase session check failed:',
-            error
-          );
-
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
+          setCurrentUserEmail(null);
           setIsAuthChecking(false);
           return;
         }
-
         await authorizeSession(session);
       } catch (error) {
-        console.error(
-          'Authentication check failed:',
-          error
-        );
-
         if (mounted) {
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
+          setCurrentUserEmail(null);
           setIsAuthChecking(false);
         }
       }
@@ -391,11 +289,7 @@ export function App() {
 
     void checkSession();
 
-    const {
-      data: { subscription }
-    } = client.auth.onAuthStateChange((_event, session) => {
-      // Do not make additional Supabase requests directly inside the
-      // auth callback. Defer the admin_users authorization check.
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       window.setTimeout(() => {
         if (mounted) {
           void authorizeSession(session);
@@ -407,14 +301,10 @@ export function App() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [
-    supabaseConfig?.url,
-    supabaseConfig?.anonKey
-  ]);
+  }, [supabaseConfig?.url, supabaseConfig?.anonKey]);
 
 
   // ── Log helper ──────────────────────────────────────────────
-
 
   const pushLog = useCallback(
     (
@@ -429,24 +319,19 @@ export function App() {
         action,
         details,
         eventId,
-        type
+        type,
+        userEmail: currentUserEmail || 'Unknown Admin' // INJECT EMAIL HERE
       };
 
-      setLogs(prev => [
-        newLog,
-        ...prev
-      ]);
+      setLogs(prev => [newLog, ...prev]);
     },
-    []
+    [currentUserEmail] // Add dependency
   );
 
   // ── Persist non-authoritative UI logs only ─────────────────
 
   useEffect(() => {
-    localStorage.setItem(
-      'aurum_logs',
-      JSON.stringify(logs)
-    );
+    localStorage.setItem('aurum_logs', JSON.stringify(logs));
   }, [logs]);
 
   // ═══════════════════════════════════════════════════════════
@@ -454,8 +339,6 @@ export function App() {
   // ═══════════════════════════════════════════════════════════
 
   useEffect(() => {
-    // The full administrator dataset must never be requested until the
-    // Supabase session AND admin_users authorization have both succeeded.
     if (!isAuthenticated || !isAuthorizedAdmin) {
       setEvents([]);
       setSubmissions([]);
@@ -463,272 +346,126 @@ export function App() {
     }
 
     const client = getSupabaseClient();
-
     if (!client) return;
 
     let cancelled = false;
 
     const loadFromSupabase = async () => {
       const [
-        {
-          data: eventRows,
-          error: eventError
-        },
-        {
-          data: registrationRows,
-          error: registrationError
-        }
+        { data: eventRows, error: eventError },
+        { data: registrationRows, error: registrationError }
       ] = await Promise.all([
-        client
-          .from('events')
-          .select('*')
-          .order(
-            'created_at',
-            { ascending: false }
-          ),
-
-        client
-          .from('registrations')
-          .select(`
+        client.from('events').select('*').order('created_at', { ascending: false }),
+        client.from('registrations').select(`
             *,
-            campers (
-              id,
-              submission_id,
-              full_name,
-              badge_name,
-              age,
-              grade_level,
-              gender,
-              sort_order
-            )
-          `)
-          .order(
-            'submitted_at',
-            { ascending: false }
-          )
+            campers (id, submission_id, full_name, badge_name, age, grade_level, gender, sort_order)
+          `).order('submitted_at', { ascending: false })
       ]);
 
       if (cancelled) return;
 
-      // ── Events ─────────────────────────────────────────────
-
       if (eventError) {
-        console.warn(
-          'Supabase events load error:',
-          eventError
-        );
+        console.warn('Supabase events load error:', eventError);
       } else if (eventRows) {
-        const mappedEvents:
-          RegistrationEvent[] =
-          eventRows.map(
-            (row: any) => ({
-              id: row.id,
-              title: row.title,
-              slug: row.slug,
-              type: row.type,
-              category: row.category,
-              description:
-                row.description || '',
-              location:
-                row.location || undefined,
-              eventDate:
-                row.event_date || undefined,
-              status: row.status,
-              themeBanner:
-                row.theme_banner || undefined,
-              fields:
-                Array.isArray(row.fields)
-                  ? row.fields
-                  : [],
-              created_at:
-                row.created_at,
-              last_used_at:
-                row.last_used_at,
-              maxRegistrations:
-                row.max_registrations ??
-                undefined,
-              submitButtonText:
-                row.submit_button_text ??
-                undefined,
-              successMessage:
-                row.success_message ??
-                undefined,
-              externalLink:
-                row.external_link ??
-                undefined,
-              isMultiPart:
-                row.is_multi_part ??
-                undefined
-            })
-          );
+        const mappedEvents = eventRows.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          slug: row.slug,
+          type: row.type,
+          category: row.category,
+          description: row.description || '',
+          location: row.location || undefined,
+          eventDate: row.event_date || undefined,
+          status: row.status,
+          themeBanner: row.theme_banner || undefined,
+          fields: Array.isArray(row.fields) ? row.fields : [],
+          created_at: row.created_at,
+          last_used_at: row.last_used_at,
+          maxRegistrations: row.max_registrations ?? undefined,
+          submitButtonText: row.submit_button_text ?? undefined,
+          successMessage: row.success_message ?? undefined,
+          externalLink: row.external_link ?? undefined,
+          isMultiPart: row.is_multi_part ?? undefined
+        }));
 
-        if (!hasSyncedRef.current) {
-          hasSyncedRef.current = true;
-        }
-
+        if (!hasSyncedRef.current) hasSyncedRef.current = true;
         setEvents(mappedEvents);
       }
 
-      // ── Registrations + campers ────────────────────────────
-
       if (registrationError) {
-        console.warn(
-          'Supabase registrations load error:',
-          registrationError
-        );
+        console.warn('Supabase registrations load error:', registrationError);
       } else if (registrationRows) {
-        const mappedSubmissions:
-          RegistrationSubmission[] =
-          registrationRows.map(
-            (row: any) => ({
-              id: row.id,
-              eventId: row.event_id,
-              submitted_at:
-                row.submitted_at,
-              status: row.status,
-              data: row.data || {},
-              notes:
-                row.notes || undefined,
-              campers:
-                Array.isArray(row.campers)
-                  ? row.campers
-                      .slice()
-                      .sort(
-                        (
-                          a: any,
-                          b: any
-                        ) =>
-                          (a.sort_order ??
-                            0) -
-                          (b.sort_order ??
-                            0)
-                      )
-                      .map(mapCamperRow)
-                  : []
-            })
-          );
+        const mappedSubmissions = registrationRows.map((row: any) => ({
+          id: row.id,
+          eventId: row.event_id,
+          submitted_at: row.submitted_at,
+          status: row.status,
+          data: row.data || {},
+          notes: row.notes || undefined,
+          campers: Array.isArray(row.campers)
+            ? row.campers.slice().sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(mapCamperRow)
+            : []
+        }));
 
-        setSubmissions(
-          mappedSubmissions
-        );
+        setSubmissions(mappedSubmissions);
       }
     };
 
     void loadFromSupabase();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    supabaseConfig?.url,
-    supabaseConfig?.anonKey,
-    isAuthenticated,
-    isAuthorizedAdmin
-  ]);
+    return () => { cancelled = true; };
+  }, [supabaseConfig?.url, supabaseConfig?.anonKey, isAuthenticated, isAuthorizedAdmin]);
 
   // ── Hash routing ────────────────────────────────────────────
 
   useEffect(() => {
     const handleHashChange = () => {
-      const hash =
-        window.location.hash || '';
-
-      const camperMatch =
-        hash.match(
-          CAMPER_LIST_HASH_RE
-        );
+      const hash = window.location.hash || '';
+      const camperMatch = hash.match(CAMPER_LIST_HASH_RE);
 
       if (camperMatch) {
-        setCamperListEventId(
-          camperMatch[1]
-        );
-
+        setCamperListEventId(camperMatch[1]);
         setPublicEventId(null);
         return;
       }
 
-      const formMatch =
-        hash.match(
-          PUBLIC_FORM_HASH_RE
-        );
-
-      setPublicEventId(
-        formMatch
-          ? formMatch[1]
-          : null
-      );
-
+      const formMatch = hash.match(PUBLIC_FORM_HASH_RE);
+      setPublicEventId(formMatch ? formMatch[1] : null);
       setCamperListEventId(null);
     };
 
     handleHashChange();
-
-    window.addEventListener(
-      'hashchange',
-      handleHashChange
-    );
-
-    return () =>
-      window.removeEventListener(
-        'hashchange',
-        handleHashChange
-      );
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   // ── Handler: Add or Update Event ────────────────────────────
 
-  const handleSaveEvent = async (
-    savedEvent: RegistrationEvent
-  ): Promise<boolean> => {
-    const client =
-      getSupabaseClient();
+  const handleSaveEvent = async (savedEvent: RegistrationEvent): Promise<boolean> => {
+    const client = getSupabaseClient();
 
     if (!client) {
-      alert(
-        'The event was NOT saved because the Supabase database is unavailable. Please check the connection and try again.'
-      );
-
+      alert('The event was NOT saved because the Supabase database is unavailable. Please check the connection and try again.');
       return false;
     }
 
-    const existingEvent =
-      events.find(
-        e => e.id === savedEvent.id
-      );
-
-    const now =
-      new Date().toISOString();
+    const existingEvent = events.find(e => e.id === savedEvent.id);
+    const now = new Date().toISOString();
 
     const eventId =
-      existingEvent?.id &&
-      UUID_RE.test(existingEvent.id)
+      existingEvent?.id && UUID_RE.test(existingEvent.id)
         ? existingEvent.id
-        : savedEvent.id &&
-            UUID_RE.test(savedEvent.id)
+        : savedEvent.id && UUID_RE.test(savedEvent.id)
           ? savedEvent.id
           : safeRandomUUID();
 
-    const eventToSave:
-      RegistrationEvent = {
+    const eventToSave: RegistrationEvent = {
       ...savedEvent,
       id: eventId,
-      created_at:
-        existingEvent?.created_at ||
-        savedEvent.created_at ||
-        now,
+      created_at: existingEvent?.created_at || savedEvent.created_at || now,
       last_used_at: now
     };
 
-    // ── Build the DB row ──────────────────────────────────────────────────
-    // NOTE: external_link and is_multi_part require the following columns to
-    // exist in your Supabase `events` table. If they are missing the upsert
-    // will fail; we detect that and retry without them so the app never
-    // hard-blocks.  Run this in the Supabase SQL editor to add them:
-    //
-    //   ALTER TABLE events
-    //     ADD COLUMN IF NOT EXISTS external_link  jsonb    DEFAULT NULL,
-    //     ADD COLUMN IF NOT EXISTS is_multi_part  boolean  DEFAULT false;
-    //
     const dbRowFull = {
       id: eventToSave.id,
       title: eventToSave.title,
@@ -749,7 +486,6 @@ export function App() {
       last_used_at: eventToSave.last_used_at
     };
 
-    // Core columns that are guaranteed to exist in every schema version
     const dbRowCore = {
       id: eventToSave.id,
       title: eventToSave.title,
@@ -768,189 +504,89 @@ export function App() {
       last_used_at: eventToSave.last_used_at
     };
 
-    // ── Try full upsert; fall back to core-only if schema is missing cols ─
     let persistedRow: any = null;
     let error: any = null;
 
-    // Helper: attempt upsert with the given row payload
     const attemptUpsert = async (row: Record<string, any>) => {
-      return client
-        .from('events')
-        .upsert(row, { onConflict: 'id' })
-        .select('*')
-        .single();
+      return client.from('events').upsert(row, { onConflict: 'id' }).select('*').single();
     };
 
     ({ data: persistedRow, error } = await attemptUpsert(dbRowFull));
 
-    // If the error is about a missing column, retry with the safe subset
-    if (
-      error &&
-      (error.message?.includes('external_link') ||
-        error.message?.includes('is_multi_part') ||
-        error.code === '42703' // undefined_column in PostgreSQL
-      )
-    ) {
-      console.warn(
-        'Supabase: external_link / is_multi_part columns missing — retrying without them.',
-        'Run the migration SQL shown in the source comment to fix this permanently.'
-      );
-
+    if (error && (error.message?.includes('external_link') || error.message?.includes('is_multi_part') || error.code === '42703')) {
       ({ data: persistedRow, error } = await attemptUpsert(dbRowCore));
     }
 
-    // ── Handle duplicate slug constraint (events_slug_key) ───────────────
-    // When creating a new event whose slug already exists in the DB, Supabase
-    // returns a 23505 (unique_violation) error referencing events_slug_key.
-    // Fix it by appending a numeric suffix and retrying.
-    if (
-      error &&
-      (error.code === '23505' || error.message?.includes('events_slug_key'))
-    ) {
+    if (error && (error.code === '23505' || error.message?.includes('events_slug_key'))) {
       const suffix = `-${Date.now().toString(36)}`;
       const deduplicatedSlug = eventToSave.slug + suffix;
       eventToSave.slug = deduplicatedSlug;
       dbRowFull.slug = deduplicatedSlug;
       dbRowCore.slug = deduplicatedSlug;
-      console.warn(`Slug collision — retrying with deduplicated slug: ${deduplicatedSlug}`);
 
       ({ data: persistedRow, error } = await attemptUpsert(dbRowFull));
 
-      // Fall back to core if the full row still fails on missing columns
-      if (
-        error &&
-        (error.message?.includes('external_link') ||
-          error.message?.includes('is_multi_part') ||
-          error.code === '42703')
-      ) {
+      if (error && (error.message?.includes('external_link') || error.message?.includes('is_multi_part') || error.code === '42703')) {
         ({ data: persistedRow, error } = await attemptUpsert(dbRowCore));
       }
     }
 
     if (error || !persistedRow) {
       console.error('Supabase event save error:', error);
-      alert(
-        `Event was NOT saved. No public registration link has been created.\n\n${
-          error?.message || 'Supabase did not return the saved event.'
-        }`
-      );
+      alert(`Event was NOT saved. No public registration link has been created.\n\n${error?.message || 'Supabase did not return the saved event.'}`);
       return false;
     }
 
-
-    const persistedEvent:
-      RegistrationEvent = {
+    const persistedEvent: RegistrationEvent = {
       id: persistedRow.id,
-      title:
-        persistedRow.title,
-      slug:
-        persistedRow.slug,
-      type:
-        persistedRow.type,
-      category:
-        persistedRow.category,
-      description:
-        persistedRow.description ||
-        '',
-      location:
-        persistedRow.location ||
-        undefined,
-      eventDate:
-        persistedRow.event_date ||
-        undefined,
-      status:
-        persistedRow.status,
-      themeBanner:
-        persistedRow.theme_banner ||
-        undefined,
-      fields:
-        Array.isArray(
-          persistedRow.fields
-        )
-          ? persistedRow.fields
-          : [],
-      created_at:
-        persistedRow.created_at,
-      last_used_at:
-        persistedRow.last_used_at,
-      maxRegistrations:
-        persistedRow.max_registrations ??
-        undefined,
-      submitButtonText:
-        persistedRow.submit_button_text ??
-        undefined,
-      successMessage:
-        persistedRow.success_message ??
-        undefined,
-      externalLink:
-        persistedRow.external_link ?? eventToSave.externalLink ?? undefined,
-      isMultiPart:
-        persistedRow.is_multi_part ?? eventToSave.isMultiPart ?? undefined
+      title: persistedRow.title,
+      slug: persistedRow.slug,
+      type: persistedRow.type,
+      category: persistedRow.category,
+      description: persistedRow.description || '',
+      location: persistedRow.location || undefined,
+      eventDate: persistedRow.event_date || undefined,
+      status: persistedRow.status,
+      themeBanner: persistedRow.theme_banner || undefined,
+      fields: Array.isArray(persistedRow.fields) ? persistedRow.fields : [],
+      created_at: persistedRow.created_at,
+      last_used_at: persistedRow.last_used_at,
+      maxRegistrations: persistedRow.max_registrations ?? undefined,
+      submitButtonText: persistedRow.submit_button_text ?? undefined,
+      successMessage: persistedRow.success_message ?? undefined,
+      externalLink: persistedRow.external_link ?? eventToSave.externalLink ?? undefined,
+      isMultiPart: persistedRow.is_multi_part ?? eventToSave.isMultiPart ?? undefined
     };
 
     setEvents(prev => {
-      const exists =
-        prev.some(
-          e =>
-            e.id ===
-            persistedEvent.id
-        );
-
-      return exists
-        ? prev.map(e =>
-            e.id ===
-            persistedEvent.id
-              ? persistedEvent
-              : e
-          )
-        : [
-            persistedEvent,
-            ...prev
-          ];
+      const exists = prev.some(e => e.id === persistedEvent.id);
+      return exists ? prev.map(e => e.id === persistedEvent.id ? persistedEvent : e) : [persistedEvent, ...prev];
     });
 
     setIsFormBuilderOpen(false);
     setEditingEvent(undefined);
 
     pushLog(
-      existingEvent
-        ? 'Event Updated'
-        : 'Event Created',
-
-      existingEvent
-        ? `Updated registration site "${persistedEvent.title}"`
-        : `Created new registration site "${persistedEvent.title}"`,
-
+      existingEvent ? 'Event Updated' : 'Event Created',
+      existingEvent ? `Updated registration site "${persistedEvent.title}"` : `Created new registration site "${persistedEvent.title}"`,
       'info',
       persistedEvent.id
     );
+
     return true;
   };
 
   // ── Handler: Select Template ────────────────────────────────
 
-  const handleSelectTemplate = (
-    template: FormTemplate
-  ) => {
-    const draft:
-      Partial<RegistrationEvent> = {
-      title:
-        template.defaultTitle,
-      type:
-        template.defaultType,
-      category:
-        template.category,
-      description:
-        template.defaultDescription,
-      fields:
-        template.fields,
-      submitButtonText:
-        template.defaultType ===
-        'pre-registration'
-          ? 'Submit Pre-Registration'
-          : 'Confirm Registration',
-      successMessage:
-        'Thank you! Your registration details have been received.'
+  const handleSelectTemplate = (template: FormTemplate) => {
+    const draft: Partial<RegistrationEvent> = {
+      title: template.defaultTitle,
+      type: template.defaultType,
+      category: template.category,
+      description: template.defaultDescription,
+      fields: template.fields,
+      submitButtonText: template.defaultType === 'pre-registration' ? 'Submit Pre-Registration' : 'Confirm Registration',
+      successMessage: 'Thank you! Your registration details have been received.'
     };
 
     setEditingEvent(draft);
@@ -959,417 +595,153 @@ export function App() {
 
   // ── Handler: Archive Event ──────────────────────────────────
 
-  const handleArchiveEvent =
-    async (eventId: string) => {
-      const ev =
-        events.find(
-          e => e.id === eventId
-        );
+  const handleArchiveEvent = async (eventId: string) => {
+    const ev = events.find(e => e.id === eventId);
+    if (!ev) return;
 
-      if (!ev) return;
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: 'archived' as const } : e));
 
-      setEvents(prev =>
-        prev.map(e =>
-          e.id === eventId
-            ? {
-                ...e,
-                status:
-                  'archived' as const
-              }
-            : e
-        )
-      );
+    pushLog('Event Archived', `Archived site "${ev.title}" to History Vault`, 'warning', eventId);
 
-      pushLog(
-        'Event Archived',
-        `Archived site "${ev.title}" to History Vault`,
-        'warning',
-        eventId
-      );
-
-      const client =
-        getSupabaseClient();
-
-      if (client) {
-        const { error } =
-          await client
-            .from('events')
-            .update({
-              status: 'archived'
-            })
-            .eq('id', eventId);
-
-        if (error) {
-          console.warn(
-            'Supabase archive error:',
-            error
-          );
-        }
-      }
-    };
+    const client = getSupabaseClient();
+    if (client) {
+      const { error } = await client.from('events').update({ status: 'archived' }).eq('id', eventId);
+      if (error) console.warn('Supabase archive error:', error);
+    }
+  };
 
   // ── Handler: Restore Event ──────────────────────────────────
 
-  const handleRestoreEvent =
-    async (eventId: string) => {
-      const ev =
-        events.find(
-          e => e.id === eventId
-        );
+  const handleRestoreEvent = async (eventId: string) => {
+    const ev = events.find(e => e.id === eventId);
+    if (!ev) return;
 
-      if (!ev) return;
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: 'active' as const } : e));
 
-      setEvents(prev =>
-        prev.map(e =>
-          e.id === eventId
-            ? {
-                ...e,
-                status:
-                  'active' as const
-              }
-            : e
-        )
-      );
+    pushLog('Event Restored', `Restored site "${ev.title}" back to active dashboard`, 'success', eventId);
 
-      pushLog(
-        'Event Restored',
-        `Restored site "${ev.title}" back to active dashboard`,
-        'success',
-        eventId
-      );
-
-      const client =
-        getSupabaseClient();
-
-      if (client) {
-        const { error } =
-          await client
-            .from('events')
-            .update({
-              status: 'active'
-            })
-            .eq('id', eventId);
-
-        if (error) {
-          console.warn(
-            'Supabase restore error:',
-            error
-          );
-        }
-      }
-    };
+    const client = getSupabaseClient();
+    if (client) {
+      const { error } = await client.from('events').update({ status: 'active' }).eq('id', eventId);
+      if (error) console.warn('Supabase restore error:', error);
+    }
+  };
 
   // ═══════════════════════════════════════════════════════════
   // Update Submission Data
   // ═══════════════════════════════════════════════════════════
 
-  const handleUpdateSubmissionData =
-    async (
-      submissionId: string,
-      updatedData:
-        Record<string, any>,
-      updatedNotes?: string,
-      updatedStatus?:
-        SubmissionStatus,
-      updatedCampers?:
-        CamperItem[]
-    ) => {
-      // 1. Local state
+  const handleUpdateSubmissionData = async (
+    submissionId: string,
+    updatedData: Record<string, any>,
+    updatedNotes?: string,
+    updatedStatus?: SubmissionStatus,
+    updatedCampers?: CamperItem[]
+  ) => {
+    setSubmissions(prev =>
+      prev.map(s => {
+        if (s.id !== submissionId) return s;
+        return {
+          ...s,
+          data: updatedData,
+          notes: updatedNotes ?? s.notes,
+          status: updatedStatus ?? s.status,
+          campers: updatedCampers ?? s.campers
+        };
+      })
+    );
 
-      setSubmissions(prev =>
-        prev.map(s => {
-          if (
-            s.id !==
-            submissionId
-          ) {
-            return s;
-          }
+    const client = getSupabaseClient();
+    if (!client) return;
 
-          return {
-            ...s,
-            data: updatedData,
-            notes:
-              updatedNotes ??
-              s.notes,
-            status:
-              updatedStatus ??
-              s.status,
-            campers:
-              updatedCampers ??
-              s.campers
-          };
-        })
-      );
+    const patch: Record<string, any> = { data: updatedData };
+    if (updatedNotes !== undefined) patch.notes = updatedNotes;
+    if (updatedStatus !== undefined) patch.status = updatedStatus;
 
-      // 2. Supabase registration row
+    const { error } = await client.from('registrations').update(patch).eq('id', submissionId);
 
-      const client =
-        getSupabaseClient();
+    if (error) console.warn('Supabase submission update error:', error);
 
-      if (!client) return;
-
-      const patch:
-        Record<string, any> = {
-        data: updatedData
-      };
-
-      if (
-        updatedNotes !==
-        undefined
-      ) {
-        patch.notes =
-          updatedNotes;
-      }
-
-      if (
-        updatedStatus !==
-        undefined
-      ) {
-        patch.status =
-          updatedStatus;
-      }
-
-      const { error } =
-        await client
-          .from(
-            'registrations'
-          )
-          .update(patch)
-          .eq(
-            'id',
-            submissionId
-          );
-
-      if (error) {
-        console.warn(
-          'Supabase submission update error:',
-          error
-        );
-      }
-
-      // 3. Supabase campers rows
-
-      if (
-        updatedCampers !==
-        undefined
-      ) {
-        const sub =
-          submissions.find(
-            s =>
-              s.id ===
-              submissionId
-          );
-
-        const eventId =
-          sub?.eventId || '';
-
-        await persistCampers(
-          client,
-          submissionId,
-          eventId,
-          updatedCampers
-        );
-      }
-    };
+    if (updatedCampers !== undefined) {
+      const sub = submissions.find(s => s.id === submissionId);
+      const eventId = sub?.eventId || '';
+      await persistCampers(client, submissionId, eventId, updatedCampers);
+    }
+  };
 
   // ── Handler: Update Submission Status ──────────────────────
 
-  const handleUpdateSubmissionStatus =
-    (
-      submissionId: string,
-      newStatus:
-        SubmissionStatus
-    ) => {
-      setSubmissions(prev =>
-        prev.map(s =>
-          s.id === submissionId
-            ? {
-                ...s,
-                status:
-                  newStatus
-              }
-            : s
-        )
-      );
+  const handleUpdateSubmissionStatus = (submissionId: string, newStatus: SubmissionStatus) => {
+    setSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, status: newStatus } : s));
 
-      const client =
-        getSupabaseClient();
-
-      if (client) {
-        client
-          .from(
-            'registrations'
-          )
-          .update({
-            status: newStatus
-          })
-          .eq(
-            'id',
-            submissionId
-          )
-          .then(
-            ({ error }) => {
-              if (error) {
-                console.warn(
-                  'Supabase submission status update error:',
-                  error
-                );
-              }
-            }
-          );
-      }
-    };
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('registrations').update({ status: newStatus }).eq('id', submissionId).then(({ error }) => {
+        if (error) console.warn('Supabase submission status update error:', error);
+      });
+    }
+  };
 
   // ── Handler: Delete Submission ──────────────────────────────
 
-  const handleDeleteSubmission =
-    async (
-      submissionId: string
-    ) => {
-      const client =
-        getSupabaseClient();
+  const handleDeleteSubmission = async (submissionId: string) => {
+    const client = getSupabaseClient();
 
-      // 1. Explicit camper cleanup
+    if (client) {
+      const { error: camperErr } = await client.from('campers').delete().eq('submission_id', submissionId);
+      if (camperErr) console.warn('Supabase campers delete error:', camperErr);
+    }
 
-      if (client) {
-        const {
-          error: camperErr
-        } = await client
-          .from('campers')
-          .delete()
-          .eq(
-            'submission_id',
-            submissionId
-          );
-
-        if (camperErr) {
-          console.warn(
-            'Supabase campers delete error:',
-            camperErr
-          );
-        }
+    if (client) {
+      const { error: regErr } = await client.from('registrations').delete().eq('id', submissionId);
+      if (regErr) {
+        console.error('Supabase submission delete error:', regErr);
+        alert(`Could not delete this registration from Supabase.\n\n${regErr.message}`);
+        return;
       }
+    }
 
-      // 2. Delete registration
-
-      if (client) {
-        const {
-          error: regErr
-        } = await client
-          .from(
-            'registrations'
-          )
-          .delete()
-          .eq(
-            'id',
-            submissionId
-          );
-
-        if (regErr) {
-          console.error(
-            'Supabase submission delete error:',
-            regErr
-          );
-
-          alert(
-            `Could not delete this registration from Supabase.\n\n${regErr.message}`
-          );
-
-          return;
-        }
-      }
-
-      // 3. Remove local state
-
-      setSubmissions(prev =>
-        prev.filter(
-          s =>
-            s.id !==
-            submissionId
-        )
-      );
-    };
+    setSubmissions(prev => prev.filter(s => s.id !== submissionId));
+  };
 
   // ── AI Assistant Quick Actions Router ──────────────────────
 
-  const handleAIAction = (
-    actionType: string,
-    payload?: any
-  ) => {
-    if (
-      actionType ===
-        'create_event' &&
-      payload &&
-      typeof payload ===
-        'object'
-    ) {
+  const handleAIAction = (actionType: string, payload?: any) => {
+    if (actionType === 'create_event' && payload && typeof payload === 'object') {
       setEditingEvent(payload);
       setIsFormBuilderOpen(true);
       setIsAIAssistantOpen(false);
-    } else if (
-      actionType ===
-      'open_templates'
-    ) {
+    } else if (actionType === 'open_templates') {
       setActiveTab('templates');
       setIsAIAssistantOpen(false);
-    } else if (
-      actionType ===
-      'open_table'
-    ) {
+    } else if (actionType === 'open_table') {
       setEventDataViewId(null);
-      setActiveTab(
-        'submissions'
-      );
+      setActiveTab('submissions');
       setIsAIAssistantOpen(false);
-    } else if (
-      actionType ===
-      'open_archive'
-    ) {
+    } else if (actionType === 'open_archive') {
       setActiveTab('archive');
       setIsAIAssistantOpen(false);
-    } else if (
-      actionType ===
-      'open_supabase'
-    ) {
-      setActiveTab(
-        'supabase'
-      );
+    } else if (actionType === 'open_supabase') {
+      setActiveTab('supabase');
       setIsAIAssistantOpen(false);
     }
   };
 
   // ═══════════════════════════════════════════════════════════
   // PUBLIC ROUTES
-  //
-  // IMPORTANT:
-  // These checks MUST remain before the administrator
-  // authentication guard.
   // ═══════════════════════════════════════════════════════════
 
-  // ── Camper list route ───────────────────────────────────────
-
-    if (camperListEventId) {
-    return (
-      <CamperListPage
-        eventId={
-          camperListEventId
-        }
-      />
-    );
+  if (camperListEventId) {
+    return <CamperListPage eventId={camperListEventId} />;
   }
-  // ── Public registration route ───────────────────────────────
 
   if (publicEventId) {
     return (
       <PublicRegistrationPage
         eventId={publicEventId}
         onBackToDashboard={() => {
-          window.location.hash =
-            '';
-
-          setPublicEventId(
-            null
-          );
+          window.location.hash = '';
+          setPublicEventId(null);
         }}
       />
     );
@@ -1377,9 +749,6 @@ export function App() {
 
   // ═══════════════════════════════════════════════════════════
   // ADMIN AUTHENTICATION GUARD
-  //
-  // Everything below this point requires an authenticated
-  // Supabase session.
   // ═══════════════════════════════════════════════════════════
 
   if (isAuthChecking) {
@@ -1387,11 +756,7 @@ export function App() {
       <div className="min-h-screen bg-[#070d19] flex items-center justify-center px-4">
         <div className="text-center">
           <div className="w-10 h-10 mx-auto border-4 border-slate-700 border-t-amber-400 rounded-full animate-spin" />
-
-          <p className="mt-4 text-sm text-slate-400">
-            Verifying administrator
-            session...
-          </p>
+          <p className="mt-4 text-sm text-slate-400">Verifying administrator session...</p>
         </div>
       </div>
     );
@@ -1405,11 +770,8 @@ export function App() {
             {authError}
           </div>
         )}
-
         <LoginPage
           onAuthenticated={() => {
-            // LoginPage establishes the Supabase session only.
-            // App.tsx still verifies admin_users before allowing access.
             setAuthError(null);
             setIsAuthChecking(true);
           }}
@@ -1420,14 +782,7 @@ export function App() {
 
   // ── Selected event for per-event data page ─────────────────
 
-  const eventDataViewEvent =
-    eventDataViewId
-      ? events.find(
-          e =>
-            e.id ===
-            eventDataViewId
-        ) || null
-      : null;
+  const eventDataViewEvent = eventDataViewId ? events.find(e => e.id === eventDataViewId) || null : null;
 
   // ═══════════════════════════════════════════════════════════
   // ADMIN DASHBOARD
@@ -1438,173 +793,79 @@ export function App() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={tab => {
-          setEventDataViewId(
-            null
-          );
-
+          setEventDataViewId(null);
           setActiveTab(tab);
         }}
         onOpenNewEvent={() => {
-          setEditingEvent(
-            undefined
-          );
-
-          setIsFormBuilderOpen(
-            true
-          );
+          setEditingEvent(undefined);
+          setIsFormBuilderOpen(true);
         }}
-        onToggleAIAssistant={() =>
-          setIsAIAssistantOpen(
-            !isAIAssistantOpen
-          )
-        }
-        supabaseConfig={
-          supabaseConfig
-        }
-        eventsCount={
-          events.filter(
-            e =>
-              e.status !==
-              'archived'
-          ).length
-        }
+        onToggleAIAssistant={() => setIsAIAssistantOpen(!isAIAssistantOpen)}
+        supabaseConfig={supabaseConfig}
+        eventsCount={events.filter(e => e.status !== 'archived').length}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
         {eventDataViewEvent ? (
           <EventDataView
-            event={
-              eventDataViewEvent
-            }
-            submissions={submissions.filter(
-              s =>
-                s.eventId ===
-                eventDataViewEvent.id
-            )}
-            onBack={() =>
-              setEventDataViewId(
-                null
-              )
-            }
-            onUpdateSubmissionStatus={
-              handleUpdateSubmissionStatus
-            }
-            onUpdateSubmissionData={
-              handleUpdateSubmissionData
-            }
-            onDeleteSubmission={
-              handleDeleteSubmission
-            }
+            event={eventDataViewEvent}
+            submissions={submissions.filter(s => s.eventId === eventDataViewEvent.id)}
+            onBack={() => setEventDataViewId(null)}
+            onUpdateSubmissionStatus={handleUpdateSubmissionStatus}
+            onUpdateSubmissionData={handleUpdateSubmissionData}
+            onDeleteSubmission={handleDeleteSubmission}
           />
         ) : (
           <>
-            {activeTab ===
-              'events' && (
+            {activeTab === 'events' && (
               <EventsView
-                events={
-                  events
-                }
-                submissions={
-                  submissions
-                }
+                events={events}
+                submissions={submissions}
                 onOpenNewEvent={() => {
-                  setEditingEvent(
-                    undefined
-                  );
-
-                  setIsFormBuilderOpen(
-                    true
-                  );
+                  setEditingEvent(undefined);
+                  setIsFormBuilderOpen(true);
                 }}
-                onEditEvent={
-                  event => {
-                    setEditingEvent(
-                      event
-                    );
-
-                    setIsFormBuilderOpen(
-                      true
-                    );
-                  }
-                }
-                onArchiveEvent={
-                  handleArchiveEvent
-                }
-                onOpenPublicForm={
-                  event => {
-                    window.location.hash =
-                      `/form/${event.id}`;
-                  }
-                }
-                onViewSubmissions={
-                  eventId => {
-                    setEventDataViewId(
-                      eventId
-                    );
-                  }
-                }
+                onEditEvent={event => {
+                  setEditingEvent(event);
+                  setIsFormBuilderOpen(true);
+                }}
+                onArchiveEvent={handleArchiveEvent}
+                onOpenPublicForm={event => {
+                  window.location.hash = `/form/${event.id}`;
+                }}
+                onViewSubmissions={eventId => {
+                  setEventDataViewId(eventId);
+                }}
               />
             )}
 
-            {activeTab ===
-              'templates' && (
-              <TemplatesView
-                onSelectTemplate={
-                  handleSelectTemplate
-                }
-              />
+            {activeTab === 'templates' && (
+              <TemplatesView onSelectTemplate={handleSelectTemplate} />
             )}
 
-            {activeTab ===
-              'submissions' && (
+            {activeTab === 'submissions' && (
               <SubmissionsView
-                events={
-                  events
-                }
-                submissions={
-                  submissions
-                }
-                selectedEventId={
-                  selectedSubmissionsEventId
-                }
+                events={events}
+                submissions={submissions}
+                selectedEventId={selectedSubmissionsEventId}
               />
             )}
 
-            {activeTab ===
-              'archive' && (
+            {activeTab === 'archive' && (
               <ArchiveView
-                events={
-                  events
-                }
-                submissions={
-                  submissions
-                }
+                events={events}
+                submissions={submissions}
                 logs={logs}
-                onRestoreEvent={
-                  handleRestoreEvent
-                }
+                onRestoreEvent={handleRestoreEvent}
               />
             )}
 
-            {activeTab ===
-              'supabase' && (
+            {activeTab === 'supabase' && (
               <div className="py-4">
                 <SupabaseModal
-                  config={
-                    supabaseConfig
-                  }
-                  onClose={() =>
-                    setActiveTab(
-                      'events'
-                    )
-                  }
-                  onUpdateConfig={
-                    newConfig =>
-                      setSupabaseConfig(
-                        newConfig
-                      )
-                  }
+                  config={supabaseConfig}
+                  onClose={() => setActiveTab('events')}
+                  onUpdateConfig={newConfig => setSupabaseConfig(newConfig)}
                 />
               </div>
             )}
@@ -1614,70 +875,34 @@ export function App() {
 
       {isFormBuilderOpen && (
         <FormBuilderModal
-          initialEvent={
-            editingEvent
-          }
+          initialEvent={editingEvent}
           onClose={() => {
-            setIsFormBuilderOpen(
-              false
-            );
-
-            setEditingEvent(
-              undefined
-            );
+            setIsFormBuilderOpen(false);
+            setEditingEvent(undefined);
           }}
-          onSave={
-            handleSaveEvent
-          }
+          onSave={handleSaveEvent}
         />
       )}
 
       <AIAssistantDrawer
-        isOpen={
-          isAIAssistantOpen
-        }
-        onClose={() =>
-          setIsAIAssistantOpen(
-            false
-          )
-        }
+        isOpen={isAIAssistantOpen}
+        onClose={() => setIsAIAssistantOpen(false)}
         events={events}
-        totalSubmissions={
-          submissions.length
-        }
-        onSelectAction={
-          handleAIAction
-        }
+        totalSubmissions={submissions.length}
+        onSelectAction={handleAIAction}
       />
 
       <footer className="glass-panel border-t border-slate-800/80 py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-amber-300">
-              MYRRH REGISTRY
-            </span>
-
-            <span>
-              • Event & Registration
-              Platform
-            </span>
+            <span className="font-serif font-bold text-amber-300">MYRRH REGISTRY</span>
+            <span>• Event & Registration Platform</span>
           </div>
-
           <div className="flex items-center gap-4 text-slate-400">
-            <span>
-              Supabase DB Enabled
-            </span>
-
-            <span>
-              Vercel Deployed
-            </span>
-
-            <span>
-              Lyka Colinares
-            </span>
+            <span>Supabase DB Enabled</span>
+            <span>Vercel Deployed</span>
+            <span>Lyka Colinares</span>
           </div>
-
         </div>
       </footer>
     </div>

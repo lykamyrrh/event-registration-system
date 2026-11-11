@@ -3,14 +3,10 @@ import { RegistrationEvent, RegistrationSubmission, SystemLog } from '../types';
 import { 
   Archive, 
   RotateCcw, 
-  Clock, 
   Users, 
-  Calendar, 
   Activity, 
   History, 
-  CheckCircle2, 
-  FileText,
-  AlertCircle
+  User
 } from 'lucide-react';
 
 interface ArchiveViewProps {
@@ -121,17 +117,44 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
             ) : (
               <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
                 {logs.map((log) => {
-                  const logTime = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const logTime = new Date(log.timestamp).toLocaleString([], { 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  });
+
+                  // Color logic for the action type
+                  const dotColor = 
+                    log.type === 'success' ? 'bg-amber-500' :
+                    log.type === 'warning' ? 'bg-red-400' :
+                    log.type === 'error' ? 'bg-red-500' :
+                    'bg-slate-500';
+
                   return (
                     <div key={log.id} className="relative">
-                      <div className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-amber-500 border-2 border-slate-900 shadow-sm" />
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-white">{log.action}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">{logTime}</span>
+                      <div className={`absolute -left-6 top-1 w-3.5 h-3.5 rounded-full ${dotColor} border-2 border-slate-900 shadow-sm`} />
+                      
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-white">{log.action}</span>
+                          <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">{logTime}</span>
+                        </div>
+
+                        {/* Show who did it */}
+                        {log.userEmail && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                              <User className="w-2.5 h-2.5" />
+                              {log.userEmail}
+                            </span>
+                          </div>
+                        )}
+
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          {log.details}
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        {log.details}
-                      </p>
                     </div>
                   );
                 })}

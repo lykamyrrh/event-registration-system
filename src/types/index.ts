@@ -21,7 +21,7 @@ export interface FormField {
   defaultValue?: string;
   helpText?: string;
   linkUrl?: string;
-  section?: 'part1' | 'part2'; // Part 1: Church info, Part 2: Camper info
+  section?: 'part1' | 'part2';
 }
 
 export type EventStatus = 'active' | 'draft' | 'archived';
@@ -79,7 +79,7 @@ export interface RegistrationSubmission {
   submitted_at: string;
   status: SubmissionStatus;
   data: Record<string, any>;
-  campers?: CamperItem[]; // Array of campers registered under church delegation
+  campers?: CamperItem[];
   notes?: string;
 }
 
@@ -104,7 +104,8 @@ export interface SystemLog {
   action: string;
   details: string;
   eventId?: string;
-  type: 'info' | 'success' | 'warning';
+  type: 'info' | 'success' | 'warning' | 'error';
+  userEmail?: string; // <--- ADDED
 }
 
 export interface SupabaseConfig {
