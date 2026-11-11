@@ -128,6 +128,8 @@ export function App() {
   
   // Track the current admin's email
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  // Use a Ref to bypass React state closure timing issues during login
+  const currentUserEmailRef = useRef<string | null>(null);
 
   // ── Main navigation ─────────────────────────────────────────
 
@@ -161,6 +163,35 @@ export function App() {
   const hasSyncedRef = useRef(false);
 
   // ═══════════════════════════════════════════════════════════
+  // Log helper
+  // ═══════════════════════════════════════════════════════════
+
+  const pushLog = useCallback(
+    (
+      action: string,
+      details: string,
+      type: SystemLog['type'],
+      eventId?: string
+    ) => {
+      // Read from the ref to get the latest email synchronously
+      const emailToLog = currentUserEmailRef.current || 'System Action';
+
+      const newLog: SystemLog = {
+        id: makeLogId(),
+        timestamp: new Date().toISOString(),
+        action,
+        details,
+        eventId,
+        type,
+        userEmail: emailToLog
+      };
+
+      setLogs(prev => [newLog, ...prev]);
+    },
+    [] // No longer depends on state
+  );
+
+  // ═══════════════════════════════════════════════════════════
   // Administrator authentication + admin_users authorization
   // ═══════════════════════════════════════════════════════════
 
@@ -183,6 +214,7 @@ export function App() {
         setIsAuthenticated(false);
         setIsAuthorizedAdmin(false);
         setCurrentUserEmail(null);
+        currentUserEmailRef.current = null;
         setIsAuthChecking(false);
         return;
       }
@@ -199,6 +231,7 @@ export function App() {
         setIsAuthenticated(false);
         setIsAuthorizedAdmin(false);
         setCurrentUserEmail(null);
+        currentUserEmailRef.current = null;
         setAuthError('The authenticated account does not have a valid email address.');
         setIsAuthChecking(false);
         return;
@@ -221,6 +254,7 @@ export function App() {
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
           setCurrentUserEmail(null);
+          currentUserEmailRef.current = null;
           setAuthError('Administrator authorization could not be verified.');
           setIsAuthChecking(false);
           return;
@@ -232,6 +266,7 @@ export function App() {
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
           setCurrentUserEmail(null);
+          currentUserEmailRef.current = null;
           setAuthError('This account is not authorized to access MYRRH Registry.');
           setIsAuthChecking(false);
           return;
@@ -241,6 +276,7 @@ export function App() {
         setIsAuthenticated(true);
         setIsAuthorizedAdmin(true);
         setCurrentUserEmail(email);
+        currentUserEmailRef.current = email; // <--- Set the ref immediately
         setAuthError(null);
         setIsAuthChecking(false);
 
@@ -260,6 +296,7 @@ export function App() {
         setIsAuthenticated(false);
         setIsAuthorizedAdmin(false);
         setCurrentUserEmail(null);
+        currentUserEmailRef.current = null;
         setAuthError('Administrator authorization could not be verified.');
         setIsAuthChecking(false);
       }
@@ -273,6 +310,7 @@ export function App() {
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
           setCurrentUserEmail(null);
+          currentUserEmailRef.current = null;
           setIsAuthChecking(false);
           return;
         }
@@ -282,6 +320,7 @@ export function App() {
           setIsAuthenticated(false);
           setIsAuthorizedAdmin(false);
           setCurrentUserEmail(null);
+          currentUserEmailRef.current = null;
           setIsAuthChecking(false);
         }
       }
@@ -301,32 +340,7 @@ export function App() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabaseConfig?.url, supabaseConfig?.anonKey]);
-
-
-  // ── Log helper ──────────────────────────────────────────────
-
-  const pushLog = useCallback(
-    (
-      action: string,
-      details: string,
-      type: SystemLog['type'],
-      eventId?: string
-    ) => {
-      const newLog: SystemLog = {
-        id: makeLogId(),
-        timestamp: new Date().toISOString(),
-        action,
-        details,
-        eventId,
-        type,
-        userEmail: currentUserEmail || 'Unknown Admin'
-      };
-
-      setLogs(prev => [newLog, ...prev]);
-    },
-    [currentUserEmail]
-  );
+  }, [supabaseConfig?.url, supabaseConfig?.anonKey, pushLog]); // Added pushLog to dependency array
 
   // ── Persist non-authoritative UI logs only ─────────────────
 
