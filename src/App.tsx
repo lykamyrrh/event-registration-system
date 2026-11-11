@@ -126,7 +126,7 @@ export function App() {
   const [isAuthorizedAdmin, setIsAuthorizedAdmin] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   
-  // NEW: Track the current admin's email
+  // Track the current admin's email
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   // ── Main navigation ─────────────────────────────────────────
@@ -240,11 +240,11 @@ export function App() {
         // SUCCESSFUL LOGIN
         setIsAuthenticated(true);
         setIsAuthorizedAdmin(true);
-        setCurrentUserEmail(email); // Set the email
+        setCurrentUserEmail(email);
         setAuthError(null);
         setIsAuthChecking(false);
 
-        // Log the login event (wrapped in setTimeout to ensure pushLog state is ready)
+        // Log the login event
         setTimeout(() => {
           pushLog(
             'Admin Login',
@@ -320,12 +320,12 @@ export function App() {
         details,
         eventId,
         type,
-        userEmail: currentUserEmail || 'Unknown Admin' // INJECT EMAIL HERE
+        userEmail: currentUserEmail || 'Unknown Admin'
       };
 
       setLogs(prev => [newLog, ...prev]);
     },
-    [currentUserEmail] // Add dependency
+    [currentUserEmail]
   );
 
   // ── Persist non-authoritative UI logs only ─────────────────
@@ -610,6 +610,67 @@ export function App() {
     }
   };
 
+  // ── Handler: Delete Event ──────────────────────────────────
+
+  const handleDeleteEvent = async (eventId: string) => {
+    const ev = events.find(e => e.id === eventId);
+    if (!ev) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to PERMANENTLY DELETE "${ev.title}"?\n\nThis will delete the event AND all ${submissions.filter(s => s.eventId === eventId).length} registration(s) and camper records associated with it. This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    const client = getSupabaseClient();
+
+    if (client) {
+      // Delete all campers for all submissions of this event
+      const { error: camperErr } = await client
+        .from('campers')
+        .delete()
+        .eq('event_id', eventId);
+
+      if (camperErr) {
+        console.warn('Error deleting campers:', camperErr);
+      }
+
+      // Delete all registrations for this event
+      const { error: regErr } = await client
+        .from('registrations')
+        .delete()
+        .eq('event_id', eventId);
+
+      if (regErr) {
+        alert(`Could not delete registrations from Supabase: ${regErr.message}`);
+        return;
+      }
+
+      // Delete the event itself
+      const { error: eventErr } = await client
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+
+      if (eventErr) {
+        alert(`Could not delete event from Supabase: ${eventErr.message}`);
+        return;
+      }
+    }
+
+    // Update Local State
+    setEvents(prev => prev.filter(e => e.id !== eventId));
+    setSubmissions(prev => prev.filter(s => s.eventId !== eventId));
+
+    // Log the deletion
+    pushLog(
+      'Event Deleted',
+      `Permanently deleted site "${ev.title}" and all associated records`,
+      'error',
+      eventId
+    );
+  };
+
   // ── Handler: Restore Event ──────────────────────────────────
 
   const handleRestoreEvent = async (eventId: string) => {
@@ -830,6 +891,7 @@ export function App() {
                   setIsFormBuilderOpen(true);
                 }}
                 onArchiveEvent={handleArchiveEvent}
+                onDeleteEvent={handleDeleteEvent}
                 onOpenPublicForm={event => {
                   window.location.hash = `/form/${event.id}`;
                 }}

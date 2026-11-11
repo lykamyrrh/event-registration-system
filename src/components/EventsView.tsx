@@ -14,6 +14,7 @@ import {
   Check, 
   Edit, 
   Archive,
+  Trash2, // <-- Add Trash2
   Layers
 } from 'lucide-react';
 
@@ -23,6 +24,7 @@ interface EventsViewProps {
   onOpenNewEvent: () => void;
   onEditEvent: (event: RegistrationEvent) => void;
   onArchiveEvent: (eventId: string) => void;
+  onDeleteEvent: (eventId: string) => void; // <-- Add this
   onOpenPublicForm: (event: RegistrationEvent) => void;
   onViewSubmissions: (eventId: string) => void;
 }
@@ -33,6 +35,7 @@ export const EventsView: React.FC<EventsViewProps> = ({
   onOpenNewEvent,
   onEditEvent,
   onArchiveEvent,
+  onDeleteEvent, // <-- Destructure
   onOpenPublicForm,
   onViewSubmissions
 }) => {
@@ -262,10 +265,18 @@ export const EventsView: React.FC<EventsViewProps> = ({
 
                       <button
                         onClick={() => onArchiveEvent(event.id)}
-                        className="hover:text-red-400 font-medium transition flex items-center gap-1"
+                        className="hover:text-amber-400 font-medium transition flex items-center gap-1"
                       >
                         <Archive className="w-3.5 h-3.5" />
                         <span>Archive</span>
+                      </button>
+
+                      <button
+                        onClick={() => onDeleteEvent(event.id)}
+                        className="hover:text-red-500 font-medium transition flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
