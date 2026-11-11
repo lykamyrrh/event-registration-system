@@ -14,7 +14,7 @@ import {
   Check, 
   Edit, 
   Archive,
-  Trash2, // <-- Add Trash2
+  Trash2, // <-- 1. Make sure Trash2 is imported
   Layers
 } from 'lucide-react';
 
@@ -24,7 +24,7 @@ interface EventsViewProps {
   onOpenNewEvent: () => void;
   onEditEvent: (event: RegistrationEvent) => void;
   onArchiveEvent: (eventId: string) => void;
-  onDeleteEvent: (eventId: string) => void; // <-- Add this
+  onDeleteEvent: (eventId: string) => void; // <-- 2. Make sure this prop is here
   onOpenPublicForm: (event: RegistrationEvent) => void;
   onViewSubmissions: (eventId: string) => void;
 }
@@ -35,7 +35,7 @@ export const EventsView: React.FC<EventsViewProps> = ({
   onOpenNewEvent,
   onEditEvent,
   onArchiveEvent,
-  onDeleteEvent, // <-- Destructure
+  onDeleteEvent, // <-- 3. Make sure this is destructured
   onOpenPublicForm,
   onViewSubmissions
 }) => {
@@ -271,6 +271,7 @@ export const EventsView: React.FC<EventsViewProps> = ({
                         <span>Archive</span>
                       </button>
 
+                      {/* 4. THIS IS THE DELETE BUTTON THAT WAS MISSING */}
                       <button
                         onClick={() => onDeleteEvent(event.id)}
                         className="hover:text-red-500 font-medium transition flex items-center gap-1"
